@@ -1,16 +1,15 @@
-from langchain.vectorstores import Chroma
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-import os
-from LLM import InternLM_LLM
-from langchain.prompts import PromptTemplate
-from langchain.chains import RetrievalQA
-
 # openxlab上的sqlite3版本过低
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 
+from langchain.vectorstores import Chroma
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+import os
+from LLM import InternLM_LLM
+from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
 
 # 设置环境变量
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
