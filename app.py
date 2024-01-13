@@ -7,20 +7,22 @@ from langchain.chains import RetrievalQA
 
 
 
-os.system("huggingface-cli download --resume-download internlm/internlm-chat-7b --local-dir ./")
 
 # 设置环境变量
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
 # 下载模型
-os.system('huggingface-cli download --resume-download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 --local-dir ./')
+os.system('huggingface-cli download --resume-download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 --local-dir sentence-transformer')
 
 os.system('python ./create_chroma_db.py')
+
+os.system("huggingface-cli download --resume-download internlm/internlm-chat-7b --local-dir internlm-chat-7b")
+
 
 def load_chain():
     # 加载问答链
     # 定义 Embeddings
-    embeddings = HuggingFaceEmbeddings(model_name="./sentence-transformer")
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformer")
 
     # 向量数据库持久化路径
     persist_directory = './data_base/vector_db/chroma'
@@ -32,7 +34,7 @@ def load_chain():
     )
 
     # 加载自定义 LLM
-    llm = InternLM_LLM(model_path = "./Shanghai_AI_Laboratory/internlm-chat-7b")
+    llm = InternLM_LLM(model_path = "internlm-chat-7b")
 
     # 定义一个 Prompt Template
     template = """使用以下上下文来回答最后的问题。如果你不知道答案，就说你不知道，不要试图编造答
