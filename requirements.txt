@@ -1,3 +1,4 @@
+pysqlite3-binary
 modelscope==1.9.5
 transformers==4.35.2
 streamlit==1.24.0
@@ -15,4 +16,3 @@ pdfminer
 opencv-python
 unstructured_pytesseract
 unstructured_inference
-pysqlite3-binary
