@@ -89,7 +89,7 @@ with block as demo:
             # 展示的页面标题
             gr.Markdown("""<h1><center>InternLM</center></h1>
                 <center>书生浦语</center>
-                <center>二战海军知识问答小程序</center>
+                <center>Visual grounding 从入门到放弃</center>
                 """)
 
     with gr.Row():
@@ -112,7 +112,7 @@ with block as demo:
                             msg, chatbot], outputs=[msg, chatbot])
 
     gr.Markdown("""提醒：<br>
-    1. 主炮装填时间时间可能较长，请耐心等待。
+    1. 脑子加载时间可能较长，请耐心等待。
     2. 使用中如果出现异常，将会在文本输入框进行展示，请不要惊慌。 <br>
     """)
 gr.close_all()
