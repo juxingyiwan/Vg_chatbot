@@ -1,0 +1,1435 @@
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+1
+
+CLIP-VG: Self-paced Curriculum Adapting of CLIP for Visual Grounding
+Linhui Xiao, Xiaoshan Yang, Fang Peng, Ming Yan, Yaowei Wang and Changsheng Xu, Fellow, IEEE
+
+arXiv:2305.08685v3 [cs.CV] 9 Oct 2023
+
+Abstract—Visual Grounding (VG) is a crucial topic in the field of vision and language, which involves locating a specific region described by expressions within an image. To reduce the reliance on manually labeled data, unsupervised methods have been developed to locate regions using pseudo-labels. However, the performance of existing unsupervised methods is highly dependent on the quality of pseudo-labels and these methods always encounter issues with limited diversity. In order to utilize vision and language pre-trained models to address the grounding problem, and reasonably take advantage of pseudo-labels, we propose CLIP-VG, a novel method that can conduct self-paced curriculum adapting of CLIP with pseudo-language labels. We propose a simple yet efficient end-to-end network architecture to realize the transfer of CLIP to the visual grounding. Based on the CLIP-based architecture, we further propose single-source and multi-source curriculum adapting algorithms, which can progressively find more reliable pseudo-labels to learn an optimal model, thereby achieving a balance between reliability and diversity for the pseudo-language labels. Our method outperforms the current state-of-the-art unsupervised method by a significant margin on RefCOCO/+/g datasets in both single-source and multi-source scenarios, with improvements ranging from 6.78% to 10.67% and 11.39% to 14.87%, respectively. Furthermore, our approach even outperforms existing weakly supervised methods. The code and models are available at https://github.com/linhuixiao/CLIP-VG.
+Index Terms—visual grounding, curriculum learning, pseudolanguage label, and vision-language models.
+I. INTRODUCTION
+V ISUAL Grounding (VG) [1]–[5], also known as Referring Expression Comprehension (REC) or Phrase Grounding (PG), refers to locating the bounding box (i.e., bbox) region described by a textual expression in a specific image, which has become one of the critical technologies in various Vision-Language (V-L) fields, such as visual question answering [6] and visual language navigation [7]. Due to its cross-modal properties, the grounding model
+Linhui Xiao, Xiaoshan Yang, Fang Peng and Changsheng Xu are with the State Key Laboratory of Multimodal Artificial Intelligence Systems (MAIS), Institute of Automation, Chinese Academy of Sciences (CASIA), Beijing 100190, China, also with the Peng Cheng Laboratory (PCL), Shenzhen 518066, China, and also with the School of Artificial Intelligence, University of Chinese Academy of Sciences (UCAS), Beijing 100049, China (e-mail: xiaolinhui16@mails.ucas.ac.cn, xiaoshan.yang@nlpr.ia.ac.cn, pengfang21@mails.ucas.ac.cn, csxu@nlpr.ia.ac.cn).
+Ming Yan is with the DAMO Academy, Alibaba Group, Hangzhou 311121, China (e-mail: ym119608@alibaba-inc.com). Yaowei Wang is with the Peng Cheng Laboratory, Shenzhen 518066, China (e-mail: wangyw@pcl.ac.cn).
+Changsheng Xu is the corresponding author. This work is supported by the National Natural Science Foundation of China (No. 62036012, 62322212, 62072455), and also supported by Peng Cheng Laboratory Research Project No. PCL2023AS6-1.
+
+Unlabeled image set
+RefCOCOg sample:
+
+Balancing Reliability/ Diversity
+
+Curriculum Adapting
+
+Reliability Histogram
+
+Pseudo-language Labels
+Curriculum Scheduler
+
+Unreliable. 𝒽 Reliable.
+
+Vision -Language Transformer
+
+CLIP
+
+Pred.
+
+(x,y,w,h)
+
+Reliability
+
+CLIP
+
+Measurement
+
+frozen
+
+Fig. 1. Main idea of our proposed CLIP-VG, which adapts CLIP with pseudolanguage labels in a self-paced curriculum adapting paradigm to realize the transfer learning in visual grounding.
+
+is required to comprehend the semantics of both language expressions and images, which has long been a challenging task. Considering its task complexity, most existing methods focus on fully supervised setting (i.e., using manual triplet-paired data as supervised signal) [5], [8]–[12]. Nevertheless, highquality annotation is strictly required for supervised grounding. Specifically, the expression needs to be paired with bbox, unique in referring, and rich in semantics. To reduce the reliance on labor-intensive labeled data, weakly supervised (i.e., only given image and query pairs, no paired bbox) [13]– [19] and unsupervised grounding (i.e., locating image regions without using any task-related annotations) [20]–[23] have recently gained increasing attention.
+Existing unsupervised grounding methods [20]–[22] mainly realized referring grounding with unpaired data by exploiting pre-trained detectors and an additional large-scale corpus. The state-of-the-art (SOTA) unsupervised method [23] proposes using manually designed templates and spatial relationship prior knowledge to match the results obtained by the object and attribute detectors, along with the corresponding object bbox. This generates expression and bbox pseudo pairs, which are used as pseudo-labels to learn the grounding model in a supervised manner. However, the effectiveness of the pseudo annotations in these existing methods heavily relies on the object or attribute detectors that are always pretrained on a specific dataset. This can limit the diversity of the language taxonomy and match patterns, as well as the contextual semantics richness, ultimately harming the model generalization ability.
+In the past couple of years, the Vision-Language Pre-trained
+
+0000–0000/00$00.00 © 2023 IEEE
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+2
+
+(VLP) foundation models (e.g., CLIP [24]) have achieved impressive results on many downstream tasks through adapting or prompting paradigm with a few task-related data. The main advantage of these foundation models is that they can learn general knowledge from the readily available web data and various downstream task data (e.g., BeiT3 [25]) with selfsupervised constraints. This inspires us to consider transferring the VLP models (i.e., CLIP is used in this work) to solve the downstream grounding task in an unsupervised manner. This is a challenging task due to the lack of task-related labeled data. A straightforward solution is to leverage the pseudo annotations generated in previous unsupervised grounding methods to fine-tune the pre-trained model. However, this will impact the generalization ability of the pre-trained model due to the gap between the pseudo annotations and the groundtruth task-specific annotations.
+In this paper, we propose CLIP-VG, as shown in Fig. 1, a novel method that can conduct self-paced curriculum adapting of CLIP via exploiting pseudo-language labels to address the visual grounding problem. Firstly, we propose a simple yet efficient end-to-end pure-Transformer encoder-only network architecture. It only requires adapting a few parameters and costing minimal training resources to realize the transfer of CLIP to visual grounding. Secondly, to achieve a more stable adaption of the CLIP-based network architecture by finding reliable pseudo-labels, we propose a scheme for evaluating instance-level quality and a progressive adapting algorithm based on Self-Paced Curriculum Learning (SPL), namely Reliability Measurement (Sec. III-C) and Single-source Self-paced Adapting (SSA) algorithm (Sec. III-D). The instance-level Reliability is calculated as the likelihood of being correctly predicted by a measurer model that is learned with a specific label source. Specifically, we learn a preliminary grounding model as Reliability Measurer with CLIP as the backbone for the pseudo-labels and then score the samples’ reliability to construct a Reliability Histogram (RH). Next, according to the constructed RH, the SSA algorithm is executed in a selfpaced manner, progressively sampling more reliable pseudolabels to improve the grounding performance. To efficiently select a subset of pseudo-paired data, we design a greedy sample selection strategy based on the modified binary search to achieve an optimal balance between reliability and diversity.
+One major advantage of the proposed CLIP-VG is that its progressive adapting framework is not dependent on the specific form or quality of the pseudo-labels. Therefore, the CLIP-VG can be flexibly extended to access multiple sources of pseudo-labels. In the multi-source scenario, we first independently learn a preliminary source-specific grounding model for each pseudo-label source. Then, we propose the sourcelevel complexity metric. Specifically, in different steps of the SPL, we gradually select the pseudo-label source from simple to complex according to the average number of entities per expression. Based on SSA, we further propose Sourcespecific Reliability (SR) and Cross-source Reliability (CR), as well as a Multi-source Self-paced Adapting (MSA) algorithm (Sec. III-E). The source-specific reliability is calculated as the likelihood of being correctly predicted by the grounding model learned with the current label source. In contrast, cross-
+
+source reliability is calculated as the likelihood of being correctly predicted by grounding models learned with other label sources. Thus, the whole method can progressively utilize pseudo-labels to learn the grounding model in an easy-to-hard curriculum paradigm, which maximizes the exploitation of different source pseudo-labels and ensures the generalization of the foundation model.
+On the five mainstream benchmarks, RefCOCO/+/g [2], [3], ReferitGame [26] and Flickr30K Entities [27], our model outperforms the SOTA unsupervised grounding method Pseudo-Q [23] in both single-source and multi-source scenarios with a significant margin, i.e., 6.78%∼10.67% and 11.39%∼ 14.87%, respectively. The performance gains brought by the proposed SSA and MSA algorithms are 3+%. Furthermore, our approach even outperforms existing weakly supervised methods. In comparison with the fully supervised SOTA model, QRNet [28], we achieve comparable results with only 7.7% of its updated parameters, while obtaining significant speedups in both training and inference, up to 26.84× and 7.41×, respectively. Compared to the reported results [29], our model also achieves the SOTA in terms of both speed and energy efficiency.
+In summary, the contributions of this paper are four-fold:
+• As far as we know, we are the first to adapt CLIP to realize unsupervised visual grounding. Our method can transfer the cross-modal learning ability of CLIP to visual grounding with only a small training cost.
+• We are the first to introduce self-paced curriculum learning in unsupervised visual grounding. Our proposed reliability measurement and single-source self-paced adapting can progressively enhance the CLIP-based visual grounding model by utilizing pseudo-labels in an easy-to-hard learning paradigm.
+• We first propose the multi-source self-paced adapting algorithm to extend our method for accessing multiple sources of pseudo-labels, which can flexibly improve the diversity of language taxonomy.
+• We conduct extensive experiments to evaluate the effectiveness of our approach. Results show that our method obtains significant improvements in unsupervised setting and is also competitive in fully supervised setting.
+II. RELATED WORK
+A. Visual Grounding
+Visual Grounding (VG) involves both visual and linguistic modalities. With the advancement of Transformer [30] and ViT [31], [32], the technical route of VG is changing from traditional CNN-based [8], [9], [11], [12], [33]–[36] to the Transformer-based approach [5], [23], [28], [37]. Recent VG methods can be summarized into five categories: fully supervised [5], [8]–[12], weakly supervised [16]–[19], [38], [39], semi-supervised [40], [41], unsupervised [20], [21], [23] and zero-shot [33], [42], [43]. Without using any image sample and labeled data, zero-shot work, e.g., ReCLIP [42] and adapting-CLIP [43], utilize pre-trained detectors to extract proposals, thus achieving training-free grounding capabilities. Previous unsupervised methods [20]–[22] attempt to solve
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+3
+
+this problem by using unpaired image-query based on pretrained detectors and large-scale corpus. However, imagequery and query-box double pairing under this approach will meet the challenge. Pseudo-Q [23] proposes to generate template pseudo-labels based on the detectors, which directly eliminates the error caused by double pairing. Different from Pseudo-Q, we propose self-paced adapting algorithms to find a balance between reliability and diversity for any pseudo-labels in visual grounding.
+B. Vision-Language Pre-trained Models
+Transformer-based cross-modal Vision-Language Pretrained (VLP) models emerge in an endless stream. A series of work, e.g., CLIP [24], M6 [44], ALBEF [45], OFA [46], BeiT3 [25] etc. are trained on massive data by leveraging contrastive learning and mask modeling, constantly refreshing the SOTA in various tasks [24], [45]–[47]. In order to leverage the generalization ability of the VLP models, we build our model on CLIP while considering its scalability for achieving cross-modal grounding.
+C. Curriculum Learning
+Curriculum Learning (CL), as proposed by Bengio et al. [48], is a training strategy that trains machine learning models from easy to hard, which mimics the process of human learning curricula. The strategy of CL usually performs its power in improving the generalization and denoising in various computer vision (CV) and natural language processing (NLP) tasks [49]–[51]. There are many CL-based unsupervised or semi-supervised works that focus on pseudo-labeling [52], [53]. Most of them are in NLP [54], [55], classification [56] and detection [57] tasks, where the pseudo-labels are relatively simple [51]. However, there are few CL works that focus on more complex cross-modal tasks (e.g., VQA, VLN, VG) due to the difficulty in evaluating data and models with diverse modalities and task targets [50], [51]. Self-Paced Curriculum Learning (SPL) [58] is semi-automatic CL with a dynamic curriculum, which takes the training loss of the current model as the criteria and realizes the automation of difficulty measurement [51]. Our work is designed based on the SPL paradigm.
+III. METHOD
+We propose CLIP-VG, a novel method that can conduct self-paced curriculum adapting of CLIP via exploiting pseudolanguage labels to address the visual grounding problem. Our approach mainly includes (1) a simple yet efficient CLIP-based pure-Transformer visual grounding model, (2) a sample reliability evaluation scheme, (3) a self-paced adapting algorithm in a single-source scenario, and (4) a further extended multisource self-paced adapting algorithm. In this section, we will first provide the Task Definition (Sec. III-A) and then present our method, which includes Network Architecture (Sec. III-B), Reliability Measurement (Sec. III-C), Single-source Self-paced Adapting (SSA) (Sec. III-D), and Multi-source Self-paced Adapting (MSA) (Sec. III-E).
+
+Vision-Language Cross-modality Transformer
+
+Tokenizer
+Pseudo-language label: “man gray pants.”
+“player wear socks.”
+
+CLIP Text Encoder
+CLIP Image Encoder
+
+…… …
+
+Linear Projection
+
+[Reg]
+
+Regression MLP
+Pred. (x,y,w,h)
+
+Linear Projection
+
+Layer Layer Layer
+
+Image
+
+Visual-Language Grounding Model
+
+frozen frozen
+
+Fig. 2. Our CLIP-VG model architecture (Sec. III-B) serves as a visionlanguage grounding model to realize the self-paced curriculum adapting of CLIP.
+
+A. Task Definition
+Our approach follows the setting of the previous state-ofthe-art unsupervised method Pseudo-Q [23], i.e., without using
+any task-related annotation during training. Define I as the unlabeled image dataset. By utilizing the
+generated pseudo-labels, we construct a single-source pseudo triplet-paired set, denoted as Ds = {S}, where S = (I, E, B), and E represents the set of pseudo expressions, B
+represents the set of pseudo bounding boxes. The test dataset is defined as Dt = (It, Et, Bt). We aim to learn a model Fθ : (I, E) → B based on Ds so that it can generalize well on the test data Dt:
+
+Fθ∗
+
+= arg min ℓ
+Fθ
+
+Fθ(I, E), B
+
+,
+
+(1)
+
+where ℓ represent loss function, which measures the distance between the predicted bbox and pseudo bbox by leveraging smooth L1 loss [59] and Giou loss [60] with coefficient λ:
+
+ℓ = Lsmooth-l1 Fθ(I, E ), B + λ · Lgiou Fθ(I, E ), B . (2)
+
+In this work, we also consider the problem of multi-source
+pseudo-labels. Assuming that there are multiple sources of
+triplet-paired pseudo-labels generated by different ways, denote as Ds = {Si}ni=1, where Si = (I, Ei, Bi), Ei represents the set of pseudo expressions from the i-th source and Bi represents the set of bbox from i-th source. Then, the aim of
+the model becomes:
+
+Fθ∗
+
+=
+
+arg
+
+min
+Fθ
+
+Σni=1ℓ
+
+Fθ(I, Ei), Bi
+
+.
+
+(3)
+
+B. Network Architecture
+Since CLIP is pre-trained under the image-level visionlanguage contrastive constraints, it lacks region-level grounding capabilities. To enable the transfer learning of CLIP on the grounding task while adapting only a few parameters, we only connected a 6-layer vision and language cross-modal vanilla Transformer encoder [32]. The illustration of the CLIP-VG model can be seen in Fig. 2. Our model incorporates two CLIP encoders and a Transformer encoder. To better utilize scale information, we propose extracting multi-layer visual intermediate features {fvi}ni=1 ∈ RB×Nv×Hclip from the CLIP image encoder layers and concatenating them along the hidden dimension. Then, we project them into a visual embedding
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+4
+
+reliable sample unreliable sample
+𝑺𝒐𝒖𝒓𝒄𝒆 𝟏
+𝑺𝒐𝒖𝒓𝒄𝒆 𝟐
+
+pseudo-template label
+
+Self-Paced Curriculum
+Pseudo-label Source
+
+- boy left gray pants - right shirt boy - fence left
+pseudo-relation label
+
+Train
+VLGM
+Reliability Measurer
+
+Unlabeled image 𝑰
+Reliability Measurement
+
+Self-Paced Curriculum
+Sources 𝑆1
+Measurers ℳ1
+
+Unlabeled image 𝑰
+
+𝑆2
+
+𝑆3
+
+rlb. : Reliable unrlb. : Unreliable
+
+𝑆𝑛
+
+1. Pseudo-label Source Selection.
+
+ℳ2
+
+ℳ3
+
+ℳ𝑛
+
+2. Reliability Measurer Selection.
+
+ℳ1 ℳ2 ℳ3 ℳ𝑛 fix 𝒽 = 𝒽0
+
+unrlb. 𝒽1 rlb.
+
+Reliability Histogram (SR or CR)
+
+update
+
+Performance
+…
+Performance
+…
+
+𝑺𝒐𝒖𝒓𝒄𝒆 𝟑
+
+- helmet on boy - number on shirt - boy wearing helmet
+pseudo-caption label
+
+Unlabeled image set 𝑰
+
+……
+
+- a little boy swinging at a pitch during a baseball game
+- boy stand in back position to
+…… play a game
+
+Reliability Histogram
+
+Unreliable. 𝒽
+
+Reliable.
+
+P-R curve
+
+Sampling
+
+VLGM
+Train
+
+Reliability threshold 𝓱 Greedy Sample Selection.
+
+𝑝𝑒𝑟𝑐𝑒𝑛𝑡(𝐻, ℎ)
+
+(a) Pseudo-language Labels
+
+(b) Single-source Self-paced Adapting (SSA) scheduler
+
+ℳ1 ℳ2 ℳ3 ℳ𝑛 𝒽0
+update
+unrlb. 𝒽2 rlb.
+
+P-R curve
+
+ℳ1 ℳ2 ℳ3 ℳ𝑛 𝒽0
+
+unrlb.𝒽3 rlb. Reliability threshold 𝓱
+3. Greedy Sample Selection.
+(c) Multi-source Self-paced Adapting (MSA) scheduler
+
+Fig. 3. Self-paced curriculum adapting of CLIP by exploiting pseudo-language labels to realize the unsupervised visual grounding. (a) Examples of pseudolanguage labels (The sources of different pseudo-language labels are described in Sec. IV-A, better view in zoom-in). (b) Single-source Self-paced Adapting (SSA) utilizes the vision-language grounding model (VLGM) to exploit the pseudo-template labels for reliability measurement and greedy sample selection to achieve a more stable adaption of the CLIP by finding reliable pseudo-labels. (c) Multi-source Self-paced Adapting (MSA) further proposes source-specific reliability (SR) and cross-source reliability (CR) based on SSA. It sequentially conducts pseudo-label sources selection, reliability measurer selection, and greedy sample selection to achieve an optimal balance between reliability and diversity.
+
+pv ∈ RB×Nv×Hcross with the same hidden dimension Hcross as that of the cross-modality Transformer to perceive multilayer visual representations:
+
+pv = concat[fv1, fv2, · · · , fvn] × Wv,
+
+(4)
+
+where n represents the number of extracted layers, B repre-
+sents the batch size, Nv represents the token length of CLIP
+visual features, Hclip represents the hidden dimension size of CLIP, and Wv ∈ R(n·Hclip)×Hcross represents the weight
+for visual projection. For language modality, we only project the last layer feature fllast ∈ RB×Nl×Hclip of the CLIP text encoder into a language embedding pl ∈ RB×Nl×Hcross with a language projection weight Wl ∈ R : Hclip×Hcross
+
+pl = fllast × Wl.
+
+(5)
+
+The token order input to the cross-modal Transformer is as follows:
+
+CLIP language tokens pl
+X = [ pr , p1l , p2l , · · · , pNl l , cls1, p2v, p3v, · · · , pNv v ], (6)
+CLIP visual tokens pv
+where (p1l , p2l , · · · , pNl l ) are the CLIP language tokens from pl, (cls1, p2v, p3v, · · · , pNv v ) are the CLIP visual token from pv, [cls] represents the classification token generated by CLIP image encoder. pr represents [Reg] token [5], which is used to output the region box regression results, and it is randomly initialized and optimized with the whole model. The final one used for regressing the bounding box is a multi-layer perceptron (MLP), which is a three-layer feedforward network, each consisting of a linear layer and a ReLU activation layer.
+To prevent catastrophic forgetting and maintain the generalization ability of CLIP, we freeze the parameters of CLIP encoders during training, so that we only need to adapt a few parameters. CLIP-VG does not use any whistle and bells (e.g.,
+
+ResNet, Cross-attention [23], Query shifts [28], etc. in the visual grounding SOTA models).
+
+C. Reliability Measurement
+Our approach builds upon the general curriculum learning paradigm [48], where a model goes through multiple rounds of easy-to-hard training by leveraging its own past predictions. In order to facilitate the unsupervised transfer in the grounding task, we utilize a model that has been trained on the original pseudo-labels to apply a pseudo-label quality measurement for selecting the subset of pseudo-labels and then iteratively repeating this process in a self-training cycle.
+In uni-modal tasks, the difficulty of the data can be easily measured by predefined rules, such as sentence length, Part Of Speech entropy in NLP, number of objects in CV, etc. [51] However, due to the semantic correlation of crossmodal grounding data, the quality of pseudo-labels in visual grounding cannot be evaluated directly. Thus, we define a measurement to evaluate the pseudo-label quality, named Reliability, which is calculated as the likelihood of being correctly predicted by the grounding model that is learned with a specific label source. We believe that, the higher the Reliability, the closer the pseudo-label is to the correct label, rather than noise or unreliable data.
+In the case of single-source, in order to acquire the specific Reliability of each pseudo-triplet sample, we define a preliminary grounding model directly learned from all the pseudolabels, as Reliability Measurer M:
+
+M = arg min ℓ Fθ(I, E), B ,
+
+(7)
+
+Fθ
+
+and define the Reliability r of a single sample as:
+
+r = IOU(M(i, e), b), r ∈ [0, 1.0]
+
+(8)
+
+where i, e, b represents the image, expression text, and bbox in a pseudo-triplet-paired sample. The IOU is a metric function
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+5
+
+Algorithm 1: Single-source Self-paced Adapting(SSA)
+
+Input: pseudo triplet-paired data D. Output: subset Dχ∗ , well-trained optimal model Fθ∗.
+1 Training Reliability Measurer M: 2 M ← training Fθ∗ in D by using Eq. (7);
+3 Sorted Data by Reliability:
+
+4 H←M measure D by using Eq. (9);
+
+5 while Curriculum Scheduler do
+
+6 set h0 = 0.50, ∆ = 0.10, hm = h0, init Dχ = null;
+
+7 Greedy sample selection strategy:
+
+8 while hm not optimal do
+
+9
+
+hr = hm + ∆, hl = hm − ∆;
+
+10
+
+training model Fθ∗ for hm, hr, hl by Eq. (1);
+
+11
+
+greedily update hm = hl or hr by binary search;
+
+12
+
+end
+
+13 h∗ = hm, abtain Dχ∗ , model Fθ∗ by Eqs. (1) and (13);
+
+14 end
+
+15 return Dχ∗ and Fθ∗.
+
+that can compute the Jaccard overlap between the predicted box and the pseudo box for each sample. Then, we can compute the set of Reliability R for all samples as follows:
+
+R = IOU(M(I, E), B).
+
+(9)
+
+When considering the multi-source case, we define a group of Reliability Measurers {Mi}ni=1, where each of them is learned from a specific pseudo-label source:
+
+Algorithm 2: Multi-source Self-paced Adapting(MSA)
+
+Input: multi-source pseudo triplet-paired data Si, i ∈ [1, n]. Output: subset Dχ∗ , well-trained optimal model Fθ∗. 1 if Pseudo-Label Source Selection then
+
+2 For i in [1, n] do: Compute average entities in Si;
+
+3 Reorder S1, S2, . . . , Sn according average entities;
+
+4 end
+
+5 Training Reliability Measurer Mi : 6 For i in [1, n] do: Mi ← training Fθ∗ in Si by Eq. (10); 7 while Sorted Data by Reliability do
+
+8 for i in [1, n], j in [1, n] do
+
+9
+
+Hij←Mi measure Sj by using Eq. (11);
+
+10
+
+end
+
+11 end
+
+12 while Curriculum Scheduler do
+
+13 for S1 : Sn do
+
+14
+
+set h0 = 0.50, ∆ = 0.10, hm = h0, init Dχ = null;
+
+15
+
+Reliability Measurer Selection:
+
+16
+
+determine best reliability measurer Mi∗ by Eq. (15);
+
+17
+
+Greedy sample selection strategy:
+
+18
+
+while hm not optimal do
+
+19
+
+hr = hm + ∆, hl = hm − ∆;
+
+20
+
+training model Fθ∗ for hm, hr, hl by Eq. (3);
+
+21
+
+greedily update hm = hl or hr by binary search;
+
+22
+
+end
+
+23
+
+set h∗ = hm;
+
+24
+
+update Dχ, and model Fθ∗ by using Eqs. (16) to (18)
+
+25
+
+end
+
+26 end
+
+27 return Dχ∗ and Fθ∗.
+
+Mi = arg min ℓ Fθ(I, Ei), Bi .
+
+(10)
+
+Fθ
+
+Similarly, the set of Reliability Rij is defined as:
+
+Rij = IOU(Mi(I, Ej), Bj), i ∈ [1, n], j ∈ [1, n], (11)
+
+where Rij denotes the set of reliability values for all samples in the j-th data source obtained by the i-th measurer Mi. The Rij denotes Source-specific Reliability (SR) when i = j or Cross-source Reliability (CR) when i ̸= j.
+Reliability Histogram. In order to facilitate the pseudolabel sampling during self-paced curriculum learning, we define Reliability Histogram (RH) H or Hij for each pseudolabel source based on the corresponding set of Reliability R or Rij in the single-source or multi-source case. The RH (e.g., Fig. 5) has m bins covering the range of Reliability, and each bin represents the number of samples with the reliability value in the corresponding bin interval.
+
+D. Single-source Self-paced Adapting (SSA)
+To achieve a stable adaption of the CLIP-based network architecture by finding reliable pseudo-labels, we propose the Single-source Self-paced Curriculum Adapting algorithm (SSA) to gradually sample reliable triplet-paired pseudo-labels with a careful curriculum choice based on the reliability measurement. The pipeline and formulation of SSA are shown in Fig. 3 and Algorithm 1.
+We first train a reliability measurer M for all single-source pseudo-labels in a self-training manner, and then score the reliability for all samples based on the learned measurer. According to the Reliability results R, a reliability histogram H (e.g., Fig. 5-(a1)) is constructed to complete the sorting of
+
+the pseudo-labels. The follow-up work is to find the pseudolabels that can optimize the model performance according to the reliability histogram.
+To facilitate sampling, we define a reliability threshold h, and use it to sample a subset from the pseudo-label source. Specifically, we define percent (H, h) as the extracted subset from the current pseudo-label source according to reliability histogram H, where each sample has the reliability value belongs to the interval [h, 1.0]. The number of samples in the subset can be computed mathematically as:
+
+|percent (H, h)| =
+
+1.0 r=h0
+
+H
+
+(r)
+
+.
+
+(12)
+
+Particularly, when h = 0, all data is selected. Then, the goal is to find the optimal Reliability threshold h∗ with the best
+performance on the validation set:
+
+h∗ = arg min ℓ (Fθ(percent (H, h))) .
+
+(13)
+
+h,Fθ
+
+Greedy Sample Selection. The cost is unbearable if the threshold h is traversed over the [0, 1.0] interval. Therefore,
+we propose a greedy sample selection strategy based on the modified binary search. Specifically, we define hr, hm and hl as three temporary thresholds. It is worth noting that the experimental results show that the model performance usually tends to saturate around the reliability threshold h = 0.5. Thus, we initialize the hm as 0.5, and fix hr = hm + ∆ while hl = hm − ∆. Then, greedily solving Eq. (13) by trying different values of hm. We keep updating hm = hl or hr until hm achieves better performance than both hl and hr. Based on this strategy, we can quickly find the appropriate reliability
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+6
+
+threshold with sub-optimal performance, thus reducing the model training cost and ensuring a balance between reliable and unreliable samples.
+
+E. Multi-source Self-paced Adapting (MSA)
+
+Since the proposed self-paced adapting algorithm does not depend on the specific form or quality of the pseudo-labels, it can be flexibly extended to access multiple sources of pseudolabels. Using multiple sources of pseudo-labels will increase the diversity of language taxonomy and match patterns, as well as the richness of contextual semantics, thus improving the generalization ability of the visual grounding model. In real scenarios, obtaining multiple sources of pseudo-language labels from various vision and language contexts is not difficult (e.g., large-scale corpus, visual question answering, image captioning, scene graph generation, visual language navigation, etc.). We will introduce the details of how to obtain multiple sources of pseudo-language labels in Sec. IV-A.
+The impact of unreliable data will be more severe with the inclusion of multi-source pseudo-labels. Moreover, resolving this issue is not easy due to the distribution discrepancy in language taxonomy among different label sources. Therefore, we propose Multi-source self-paced Adapting (MSA) based on SSA, as depicted in Fig. 3 and Algorithm 2.
+
+Pseudo-Label Source Selection. Before the execution of MSA, we need to decide which label source to be used for adapt training. We propose to compute the average number of entities per expression in each label source as the difficulty criterion at source level, which can be used to sort the label sources from simple to complex. We assume that the selected data source is Sj∗ in the current MSA step. Then, we can gradually consider one label source from simple to complex for learning the grounding model in each step of the MSA.
+
+Reliability Measurer Selection. Reliability measures
+learned from different pseudo sources exhibit divergent dis-
+criminative abilities for a given source. As introduced in Sec. III-C, we can obtain multiple Reliability (i.e., {Rij∗ }ni=1) for the data source Sj∗ obtained by different Reliability Measurers. Therefore, we need to select an optimal Reliability
+Measurer for sampling pseudo-labels from the data source
+used in the current MSA step. We firstly set a Reliability threshold h0 (e.g., generally
+h0 = 0.5), and use it to select a subset of the pseudo samples from the current data source. Specifically, we define percent (Hij∗ , h0) as the extracted subset from the j∗-th data source according to Hij∗ . The calculation of the samples’ number is similar as Eq. (12), that is:
+
+|percent (Hij∗ , h0)| =
+
+1.0 r=h0
+
+Hij∗
+
+(r)
+
+.
+
+(14)
+
+Next, we choose the optimal Reliability Measurer Mi∗ with the best performance on the validation set by conducting model training and validation after adding the selected subset to Dχ (Eq. (14)):
+
+i∗ = arg min ℓ (Fθ(Dχ ∪ percent (Hij∗ , h0))) , (15)
+i,Fθ
+where Dχ is the whole subset of selected pseudo samples before the current MSA step, which is initiated with null.
+
+(i) RefCOCO
+1-'chair in blue bottom right corner.’ 2-'blue couch lower right corner.’ 3-‘lady on the right.’ 4-'white tshirt kid.’ 5-‘the person all in black.’
+(ii) RefCOCO+
+1-'man in blue suit with sunglasses.’ 2-'blurry woman with black bag.’ 3-'woman is closet walking away.’ 4-'older man facing us.’ 5-'man in brown jacket.'
+(iii) RefCOCO-g
+1-'a blond male in white t-shirt and gray pants running during a frisbee game.’ 2-'man with both arms high above his head.’ 3-'a man jump and to try catch flying plate and wearing white color t-shirt.’ 4-'a man wearing a black shirt and red shorts jumping to catch a frisbee.'
+Fig. 4. The samples of the validation split in the RefCOCO/+/g dataset. The figure illustrates the characteristics of ground-truth query labels and grounding difficulty among the three datasets, with language entities highlighted in cyan.
+
+Greedy Sample Selection. After determining the optimal
+Reliability Measurer Mi∗ , we further select pseudo samples from the current data source Sj∗ according the the corresponding Reliability Histogram Hi∗j∗ . Specifically, we find the optimal Reliability threshold h∗ with the best performance
+on the validation set:
+
+h∗ = arg min ℓ (Fθ(Dχ ∪ percent (Hi∗j∗ , h))) . (16)
+h,Fθ
+This step also adopts the greedy sample selection, which is the same as the SSA in Sec. III-D. Then, we select the pseudo samples with reliability values in the interval [h∗, 1.0] from histogram Hi∗j∗ . Finally, we add the selected pseudo samples to the whole sample set Dχ as follows:
+
+Dχ = Dχ ∪ percent (Hi∗j∗ , h∗) .
+
+(17)
+
+At the end of the self-paced learning, we will obtain a final subset of pseudo-labels Dχ∗ , which can be utilized to learn the ultimate grounding model:
+
+Fθ∗
+
+=
+
+arg
+
+min
+Fθ
+
+ℓ
+
+Fθ(Dχ∗ )
+
+.
+
+(18)
+
+IV. EXPERIMENTS
+A. Implementation Details
+Datasets and Settings. Following previous fully supervised and unsupervised visual grounding work, we evaluate our approach on five mainstream datasets: RefCOCO [3], RefCOCO+ [3], RefCOCOg [2], ReferItGame [26], and Flickr30K Entities [27]. Fig. 4 displays the validation samples in the RefCOCO/+/g dataset. The ground-truth query labels’ language characteristics and grounding difficulties differ across the three datasets. The language complexity of RefCOCO/+/g increases with the number of language entities. In our experiments, we adopt exactly the same train/val/test image splits as in TransVG [5] and Pseudo-Q [23]. The number of training images in the five datasets is 16,994, 16,992, 24,698, 8,994,
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+7
+
+TABLE I COMPARISON WITH STATE-OF-THE-ART METHODS ON REFCOCO [3], REFCOCO+ [3] AND REFCOCOG [2] DATASETS IN TERMS OF top-1 ACCURACY
+(%). “Un.” REPRESENTS UNSUPERVISED. “Sup.” REFERS TO SUPERVISION LEVEL: Single-source AND Multi-source ARE THE UNSUPERVISED CASES (WITHOUT ANNOTATION), Weakly (ONLY ANNOTATED QUERIES), AND Fully (ANNOTATED BBOX-QUERY PAIRS). THE BEST TWO RESULTS WITH
+SUPERVISION LEVELS OF (SINGLE-SOURCE UNSUPERVISED + WEAKLY) AND FULLY ARE BOLD-FACED AND UNDERLINED, RESPECTIVELY. THE “†” IN THE TABLE INDICATES THAT THE RESULTS OF PSEUDO-Q IN THE MULTI-SOURCE SCENARIO ARE OBTAINED BY DIRECTLY TRAINING THE PSEUDO-Q MODEL ON DATA WITH MIXED PSEUDO-LABELS FROM MULTIPLE SOURCES. THE RESULTS ALSO SHOW THE PERFORMANCE GAINS OF THE SSA AND MSA ALGORITHMS. w/o REPRESENTS ‘WITHOUT’, w. REPRESENTS ‘WITH’. OUR RESULTS ARE HIGHLIGHTED IN BLUE SHADING, WHILE THE MAIN
+COMPARISON SOTA MODELS ARE HIGHLIGHTED IN GRAY SHADING.
+
+Method
+
+Venue
+
+Sup.
+
+RefCOCO
+
+val
+
+testA testB
+
+RefCOCO+
+
+val
+
+testA testB
+
+RefCOCOg val-g val-u test-u
+
+CPT [64] Pseudo-Q [23] CLIP-VG w/o SSA CLIP-VG (Ours)
+Pseudo-Q† CLIP-VG w/o MSA CLIP-VG (Ours)
+ARN [65] KPRN [66] DTWREG [39]
+TransVG [5] Refformer [67] VGTR [68] QRNet [28] CLIP-VG (Ours)
+
+arXiv’21 CVPR’22
+– TMM’23
+– – TMM’23
+ICCV’19
+ACMMM’19
+TPAMI’21
+ICCV’21 NIPS’21 ICME’22 CVPR’22 TMM’23
+
+Un. Singlesource
+Un. Multisource
+Weakly
+Fullly
+
+32.20 56.02 57.92 62.38
+50.23 60.18 64.89
+34.26 35.04 39.21
+80.83 82.23 79.30 84.01 84.29
+
+36.10 58.25 61.92 65.03
+54.38 65.04 69.03
+36.43 34.74 41.14
+83.38 85.59 82.16 85.85 87.76
+
+30.30 54.13 54.82 56.64
+48.25 57.03 59.12
+33.07 36.98 37.72
+76.94 76.57 74.38 82.34 78.43
+
+31.90 38.88 47.92 48.87
+37.25 48.23 50.85
+34.53 35.96 39.18
+68.00 71.58 64.40 72.94 69.55
+
+35.20 45.06 52.07 55.73
+42.44 54.21 57.31
+36.01 35.24 40.10
+72.46 75.96 70.85 76.17 77.33
+
+28.80 32.13 35.21 39.41
+31.87 38.39 41.27
+33.75 36.96 38.08
+59.24 62.16 55.84 63.81 57.62
+
+49.82 52.31 54.16
+47.32 55.26 58.06
+33.75 33.56 43.24
+68.03 -
+64.05 71.89 72.64
+
+36.70 46.25 51.45 54.11
+45.86 54.54 56.54
+-
+68.71 69.41 66.83 73.03 73.18
+
+36.50 47.44 51.47 54.81
+46.12 54.44 57.51
+-
+67.98 69.40 67.28 72.52 72.54
+
+and 29,779, respectively. It should be noted that in the unsupervised setting, we do not use any manually labeled data or bounding boxes as supervised information during training, which is only used for testing purposes.
+Sources of Different Pseudo-Language Labels. In the case of single-source (Sec. III-D), we utilize template pseudo-labels that are generated by the generation module in Pseudo-Q [23]. These labels are synthesized from spatial relationship prior knowledge and object labels provided by the detectors, which include category and attribute information. For instance, one of the templates and examples is like {Relation-ObjectAttribute}, “right man standing”. However, template pseudolabels lack grammatical and logical structures, while language taxonomy is limited by detector-recognized categories. As illustrated in Fig. 4, this poses a challenge for the model to acquire more sophisticated language logic and semantic comprehension abilities. Therefore, exploiting multi-source pseudo-language labels becomes imperative for unsupervised grounding tasks.
+In the case of multi-source (Sec. III-E), in addition to template pseudo-labels (abbreviate as tmp.), we utilized RelTR [61] based on the scene graph generation (SGG) to generate scene graph relation as the pseudo-relation label (abbreviate as rel.), and utilized M2 [62] / CLIPCap [63] based on the image captioning (IC) to generate caption as the pseudo-caption label (abbreviate as cap.) (as shown in Fig. 3-(a)). As for the pseudo bbox, the paired bbox of the subject in SGG is used for the pseudo-relation label, while for the pseudo-caption label, we obtain its pseudo bbox by utilizing an NLP parser (e.g., spaCy) to extract the subject and then pairing it with a bbox provided by the same detectors. However, these pseudo-labels also contain a significant amount of unreliable samples and noise. It is worth noting that these pseudo-label sources are only used to validate the effectiveness of our algorithm, and
+
+TABLE II COMPARISON WITH STATE-OF-THE-ART METHODS ON REFERITGAME [26] AND FLICKR30K ENTITIES [27] IN TERMS OF top-1 ACCURACY (%) IN TEST SPLIT. ANNOTATIONS ARE THE SAME AS TAB. I.
+
+Method
+
+Venue
+
+Sup.
+
+ReferIt Flickr30K
+
+Wang et al. [21] BiCM [22] Pseudo-Q [23] CLIP-VG w/o SSA CLIP-VG (Ours)
+Pseudo-Q† CLIP-VG w/o MSA CLIP-VG (Ours)
+Gupta et al. [17] Liu et al. [18] Wang et al. [19]
+TransVG [5] Refformer [67] VGTR [68] QRNet [28] CLIP-VG (Ours)
+
+ICCV’19 arXiv’22 CVPR’22
+– TMM’23
+– – TMM’23
+ECCV’20 CVPR’21 CVPR’21
+ICCV’21 NIPS’21 ICME’22 CVPR’22 TMM’23
+
+Un. Singlesource
+Un. Multisource
+Weakly
+Fullly
+
+26.48 42.96 43.32 46.16 50.63
+42.31 49.30 53.08
+37.68 38.39
+70.73 70.81
+74.61 70.89
+
+50.49 61.46 60.41 61.66 64.51
+56.77 63.33 66.62
+51.67 59.27 53.10
+79.10 78.13 74.17 81.95 81.99
+
+our method is not restricted to these pseudo-language labels.
+Network Architecture. We primarily utilize CLIP ViT-B/16 as the backbone, where the image and text encoder is a 12layer Transformer. The image encoder of CLIP comprises 12 heads with a hidden dimension of 768, and its output is aligned to 512. The text encoder of CLIP has 8 heads and a hidden dimension of 512. The length of the image encoder’s token embedding is 197, while the text encoder’s token has a length of 77. The cross-modality Transformer only consists of 6 layers, 8 heads, and a hidden dimension of 512. To achieve multi-level representation perception, we extract intermediate features from layers [1,4,8,12] in the image encoder of CLIP.
+Inputs. Previous work set the image size to 640×640 and the maximum expression length to 40. Since our model is based
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+8
+
+TABLE III TRAINING/INFERENCE COST COMPARISON. THE RESULTS ARE OBTAINED ON REFCOCO DATASET (F P S : images/(GP U · second)).
+
+Model
+
+Vision Backbone
+
+Language Backbone
+
+Cross-modal Backbone
+
+All params.
+
+Update params.
+
+Training FPS
+
+epoch
+
+GPU hours(h)
+
+Test FPS
+
+testA Time(s)
+
+Pseudo-Q [23]
+
+ResNet-50
+
+BERT-base
+
+DETR-R50 156M 156M 36.35 20
+
+TransVG [5]
+
+ResNet-101
+
+BERT-base DETR-R101 170M 168M 22.85 90
+
+MDETR [37]
+
+ResNet-101
+
+BERT-base
+
+DETR-R101 185M 185M 4.71
+
+5
+
+QRNet [28]
+
+Swin-S
+
+BERT-base
+
+None
+
+273M 273M 9.41 160
+
+CLIP-VG (Ours) CLIP-ViT-B/16 CLIP-ViT-B/16
+
+None
+
+171M 21M 252.57 90
+
+14.7 105.0 28.33 453.3 10.5
+
+78.57 59.55 19.98 50.96 377.85
+
+72 s 95 s 283 s 111 s 15 s
+
+TABLE IV ABLATION STUDY ON SSA AND MSA ALGORITHMS ADAPTING PROCESS.
+tmp. REPRESENTS PSEUDO-TEMPLATE LABEL, rel. REPRESENTS THE PSEUDO-RELATION LABEL, cap. REPRESENTS THE PSEUDO-CAPTION LABEL. Imp. REPRESENTS AN IMPROVEMENT. M. REPRESENTS THE CLIP-VG MODEL. THE RESULT OBTAINED BY THE CLIP-VG MODEL W/O EXTRACTING MULTI-LEVEL FEATURES. ml REPRESENTS THE CLIP-VG
+MODEL WITH MULTI-LEVEL FEATURE PERCEPTION.
+
+Method
+
+RefCOCO testA Imp.
+
+RefCOCO+ testA Imp.
+
+Referit test Imp.
+
+M. + tmp. M. + rel. M. + cap. M. + tmp. + rel. M. + tmp. + rel. + cap. M. + tmp. + SSA M. + tmp. + rel. + MSA M. + tmp.+rel.+cap.+ MSA ml M.+tmp.+rel.+cap.+MSA
+
+61.82 38.74 42.20 62.26 62.51 65.20 67.29 68.35 69.03
+
+–
+-23.08
+-19.62
+-0.26 ↑0.69 ↑3.38 ↑5.47 ↑6.53 ↑7.21
+
+49.06 36.94 40.03 49.09 46.84 52.67 55.32 56.30 57.41
+
+–
+-12.12
+-9.03 ↑0.03
+-2.22 ↑3.61 ↑6.26 ↑7.24 ↑8.35
+
+43.16 25.25 24.28 45.18 45.68 49.89 48.91 51.32 53.08
+
+–
+-17.91
+-18.88 ↑2.02 ↑2.52 ↑6.73 ↑5.75 ↑8.16 ↑9.92
+
+TABLE V ABLATION STUDY OF SOURCE-SPECIFIC RELIABILITY (SR) AND
+CROSS-SOURCE RELIABILITY (CR).
+
+Source Method
+
+RefCOCO testA Imp.
+
+RefCOCO+ testA Imp.
+
+ReferIt test Imp.
+
+multisource
+
+M. + w/o SR, w/o CR. M + w. SR, w/o CR. M. + w. SR, w CR.
+
+65.04 – 67.42 ↑2.38 69.03 ↑3.99
+
+54.21 – 55.64 ↑1.43 57.31 ↑3.10
+
+49.30 – 52.16 ↑2.86 53.08 ↑3.78
+
+on CLIP, we set the image size to 224×224 and the maximum expression length to 77. Specifically, the long side of the image is resized to 224, while the short side is padded to 224, and the language token is filled with empty tokens when the sentence is insufficient for alignment.
+Training Details. Our framework and experiments are all based on PyTorch by using 8 Nvidia RTX3090 GPUs. Our model is optimized end-to-end with AdamW optimizer. The initial learning rate of the cross-modal grounding module is 2.5 × 10−4. All datasets use a cosine learning rate schedule. Training 90 epochs for all models. The batch size is set as 64. To maintain a fair comparison, other unspecified settings are consistent with Pseudo-Q [23] and TransVG [5].
+B. Comparison with State-of-the-Art Methods In this section, we validate our approach on five main-
+stream benchmarks, RefCOCO/+/g [2], [3], ReferitGame [26] and Flickr30K Entities [27]. We apply our approach to single-source pseudo-template labels and multi-source pseudolanguage labels to verify the effectiveness of our method in unsupervised settings. Additionally, we compare the current mainstream SOTA models in a fully supervised setting by using manual high-quality triplet-paired annotations to confirm the superiority of our model in terms of both speed and energy efficiency.
+RefCOCO/RefCOCO+/RefCOCOg. As shown in Tab. I, we provide results in both fully supervised and unsupervised
+
+TABLE VI ABLATION STUDY OF MULTI-SOURCE CURRICULUM LEARNING ORDER.
+THE RESULT OBTAINED BY THE CLIP-VG MODEL W/O EXTRACTING MULTI-LEVEL FEATURES. ANNOTATIONS ARE THE SAME AS IN TAB. IV.
+Curriculum Order RefCOCO(val) RefCOCO+(val) ReferIt(val)
+
+cap.-rel.-tmp. rel.-tmp.-cap. tmp.-cap.-rel. tmp.-rel.-cap.
+
+58.65 60.87 62.79 62.86
+
+44.08 45.32 46.57 48.40
+
+47.63 49.79 51.94 53.85
+
+TABLE VII COMPARISON OF RESULTS USING DIFFERENT PRE-TRAINED BACKBONES. THE RESULTS ARE OBTAINED ON THE TESTA SPLIT OF THE REFCOCO/+
+DATASET. w/o REPRESENTS ‘WITHOUT’ USING THE SSA/MSA ALGORITHM, WHILE w. REPRESENTS ‘WITH’ USING THE SSA/MSA
+ALGORITHM.
+
+Source
+
+Vision Backbone
+
+singlesource
+
+ResNet-50 ResNet-101 CLIP-ViT-B/32 CLIP-ViT-B/16
+
+multisource
+
+ResNet-50 ResNet-101 CLIP-ViT-B/32 CLIP-ViT-B/16
+
+Language Backbone
+BERT-base BERT-base CLIP-ViT-B/32 CLIP-ViT-B/16
+BERT-base BERT-base CLIP-ViT-B/32 CLIP-ViT-B/16
+
+RefCOCO
+
+w/o
+
+w.
+
+57.91 58.40 60.44 61.92
+58.29 59.10 63.25 65.04
+
+60.48 61.11 64.12 65.03
+62.32 63.41 67.72 69.03
+
+RefCOCO+
+
+w/o
+
+w.
+
+42.05 44.09 50.93 52.07
+42.49 43.21 52.07 54.21
+
+45.29 47.87 53.89 55.73
+48.82 50.77 55.48 57.31
+
+settings. We compare our method with the existing SOTA unsupervised method Pseudo-Q [23] in both single-source and multi-source scenarios. Although Pseudo-Q has greatly improved compared with previous works, our method can outperform Pseudo-Q on three datasets with a significant margin, improving by 6.78%(testA), 10.67%(testA), 7.37%(test-u) in single-source and 14.65%(testA), 14.87%(testA), 11.39%(testu) in multi-source, respectively. Pseudo-labels can easily cause overfitting in a model. It can be seen that from single-source to multi-source, the performance of Pseudo-Q is degraded due to the influence of unreliable data (refer to Tab. VIII), while our model avoids it. Furthermore, the results also outperform all of the weakly supervised methods, and the model is also competitive in the fully supervised setting.
+It is worth noting that we did not compare MDETR [37] in the fully supervised setting, as MDETR utilized a pre-training approach to retrain the backbone by using mixed grounding data from multiple datasets. Therefore, it would be unfair to compare its results with our work.
+ReferItGame and Flickr30K Entities. In Tab. II, our method achieves promising accuracy on the two datasets, which is higher than Pseudo-Q by 7.31% and 4.1% in single-source, and 9.77% and 9.85% in multi-source, and also outperforms all of the weakly supervised methods.
+Training/Inference Cost and Speed. As shown in Tab. III, we
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+9
+
+Fig. 5. The complete Source-specific Reliability (SR, shown in blue color) and Cross-source Reliability (CR, shown in teal color) Histograms, which are formed by scoring the three sources of pseudo-language labels in the interval (0.0, 1.0] with different Measurers. M1, M2, M3 represent the Reliability Measurers learned from pseudo-template labels, pseudo-relation labels, and pseudo-caption labels, respectively. Different sources contain distinctive distributions due to specific quality and language taxonomy of pseudo-language labels (i.e., (a1)-(b2)-(c3)), and the different Reliability Measurer has divergent discrimination abilities on the same pseudo-label sources (i.e., (a1)-(b1)-(c1)).
+
+compare the current Transformer-based competitive models in terms of vision and language backbones, model parameters, training cost, and inference speed. The results are obtained on a single Nvidia 3090 GPU. The pre-trained backbones used by Pseudo-Q, TransVG, and MDETR are Resnet, BERT, and DETR, while QRNet uses Resnet, Swin Transformer, and BERT, and we only use CLIP-ViT-B/16. From the results, we can see that the existing fully supervised SOTA models (such as QRNet [28], MDETR [37]) are particularly slow in both training and inference. Compared to QRNet, we updated only 7.7% of its parameters and achieved impressive training and inference speedups, up to 26.84× and 7.41×, respectively, while also obtaining competitive results (Tab. I and Tab. II). Based on the reported results [29], our model is also state-ofthe-art in terms of both speed and energy efficiency.
+C. Ablation Study
+Ablation of SSA and MSA Algorithms. Tab. I and Tab. II demonstrate the performance improvements achieved by utilizing the SSA and MSA algorithms. It can be seen that the performance gains brought by the SSA and MSA algorithms are 3.11%(testA), 3.66%(testA), 3.34%(test-u) in single source, and 3.89%(testA), 3.10%(testA), 3.07%(test-u) in multi-source, respectively. Notably, our work’s improvements in the multi-source scenario are primarily attributed to the proposed MSA algorithm rather than utilizing more sources of pseudo-labels. Tab. IV demonstrates the performance gains achieved by each step on both SSA and MSA. It is evident that stacking multi-source pseudo-labels leads to a decline in performance. The results indicate that the performance steadily increased with the implementation of the MSA algorithm, ultimately resulting in significant improvement. Our method exhibits strong superiority in the multi-source scenario.
+
+Ablation of Cross-source Reliability (CR). Only Sourcespecific Reliability (SR) is utilized in the case of single-source, while both SR and CR are utilized in the case of multisource. In the single-source scenario, the model learns from the specific source and captures its primary characteristics in pseudo data. We can utilize SR to select more reliable data and reduce the impact of unreliable pseudo-labels. In the multisource scenario, the model learned from the current source is easily biased from the ideal model due to discrepancies between the pseudo-label and the ground-truth label, which may affect the effectiveness of data selection. By further considering CR, we can use models learned from other sources to guide the pseudo-label selection in the current source and sample more generalized pseudo triplet data. Tab. V shows the ablation results of CR in the multi-source scenario, indicating that it contributes to the performance gains by 1.51%, 1.67%, and 0.92%, respectively.
+Ablation of Multi-source Curriculum Learning Order. In Sec. III-E, we propose the source-level complexity metric, i.e., the average number of entities per expression. The complexity values of different pseudo-labels calculated in the experiment are as follows: tmp.:1.1562, rel.:1.8882, cap.:3.1961. Thus, MSA is performed in the order of tmp.-rel.-cap.. Tab. VI shows the results (val split) when changing the learning order, which verifies the effectiveness of our proposed curriculum order.
+Generality of SSA and MSA Algorithms. Our main experimental results are achieved with CLIP-ViT-B/16, but our proposed algorithms are general and not limited to CLIP. Tab. VII shows the results obtained by using different backbones. It can be seen that both the SSA and MSA algorithms can improve the results of the original model by about 3+%.
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+10
+
+comp-2
+
+(a1) Tmp.+Rel.+Cap. on RefCOCO
+
+60
+
+0 1
+
+40
+
+2
+
+20
+
+0
+
+20
+
+40
+
+comp-2
+
+(a2) Tmp.+Rel.+Cap. on RefCOCO
+
+60
+
+0
+
+40
+
+1 2
+
+20
+
+3
+
+0
+
+20
+
+40
+
+60
+
+60
+
+75 50 25comp0-1 25 50
+
+75 50 2c5om0p-1 25 50 75
+
+(b1) groundtruth query labels on RefCOCO/+/g (b2) MSA(Tmp.+Rel.+Cap.) on RefCOCO
+
+60
+
+3
+
+60
+
+0
+
+40
+
+4 5
+
+40
+
+1 2
+
+20
+
+20
+
+3
+
+comp-2
+
+0
+
+0
+
+20
+
+20
+
+40
+
+40
+
+60
+
+75 50 2c5omp0 -1 25 50 75
+
+75 50 25com0p-1 25 50
+
+comp-2
+
+comp-2
+
+(a3) Tmp.+Rel.+Cap. on RefCOCO+ (a4) Tmp.+Rel.+Cap. on RefCOCOg
+
+60
+
+0
+
+60
+
+0
+
+40
+
+1 2
+
+40
+
+1 2
+
+20
+
+4
+
+20
+
+5
+
+comp-2
+
+0
+
+0
+
+20
+
+20
+
+40
+
+40
+
+60
+
+60
+
+75 50 25com0 p-125 50 75
+
+50 25 com0 p-125 50 75
+
+(b3) MSA(Tmp.+Rel.+Cap.) on RefCOCO+ (b4) MSA(Tmp.+Rel.+Cap.) on RefCOCOg
+
+60
+
+0
+
+60
+
+0
+
+40
+
+1 2
+
+40
+
+1 2
+
+20
+
+4
+
+20
+
+5
+
+comp-2
+
+0
+
+0
+
+20
+
+20
+
+40
+
+40
+
+60
+
+60
+
+75 50 25com0p-1 25 50
+
+50 25com0p-1 25 50
+
+comp-2
+
+Fig. 6. The CLIP text feature of the pseudo-language labels and the ground-truth query labels on RefCOCO/+/g datasets are visualized by using t-SNE. The figure shows the comparison before and after MSA execution, and the generalization results of pseudo-language labels on the ground-truth query labels. The legend: 0-pseudo-template label, 1-pseudo-relation label, 2-pseudo-caption label, 3,4,5-the ground-truth query labels on RefCOCO/+/g val split. (a1) shows the distribution discrepancy of semantic features on language taxonomy for the pseudo-language labels on the RefCOCO dataset, while (b1) shows this distribution discrepancy for the ground-truth query labels on the RefCOCO/+/g dataset validation split. The comparison is (a2)-(b2), (a3)-(b3), (a4)-(b4). The feature distribution of pseudo-language labels after the execution of the MSA algorithm basically fits the distribution of the ground-truth query labels (i.e., (b2), (b3), (b4)). This figure shows one of the reasons for the performance gain of MSA algorithm, namely, the feature generalization for language taxonomy.
+
+loss Performance loss Performance
+
+(a) Training loss in refcoco
+
+1.6
+
+h = 0.9 h = 0.8
+
+1.4
+
+h = 0.7 h = 0.6
+
+h = 0.5
+
+1.2
+
+h = 0.4
+
+h = 0.3
+
+1.0
+
+h = 0.2 h = 0.1
+
+0.8
+
+h = 0.0
+
+0.6
+
+0 25 5e0poch75 100
+
+(b) P-R Curve
+0.60
+
+0.55
+
+0.50
+
+0.45
+
+0.40
+
+0.35
+
+refcoco refcocog
+
+refcoco+
+
+0.30 0.0 0R.1el0ia.2b0il.3ity0.4th0r.e5s0h.6o0ld.7(0h.8) 0.9
+
+Fig. 7. The result with reliability threshold h from 0.9 to 0 during the execution of the SSA algorithm on the RefCOCO/+/g datasets (val split). (a) Convergence curve on the RefCOCO dataset, and (b) P-R curve.
+
+D. Further Remarks
+Visualization of Reliability Histogram. Fig. 5 presents the histograms of Single-Source Reliability (SR) and Cross-source Reliability (CR) for pseudo-language labels in the range of (0.0, 1.0] with 1000 bins, where each bin represents the number of samples. The figure illustrates that different sources exhibit distinct distributions due to their specific quality and language taxonomy of pseudo-language labels (e.g., Fig. 5(a1)-(b2)-(c3)), while different reliability measures have varying discrimination abilities on the same source (e.g., Fig. 5(a1)-(b1)-(c1)). This provides an explanation for the performance gains of our approach.
+Visualization of MSA in Generalization Ability. As shown in Fig. 6, we use t-SNE to visualize the CLIP text feature of the pseudo-language labels and the ground-truth query labels on RefCOCO/+/g datasets. Fig. 6-(a1) is the feature of three pseudo-labels on the RefCOCO dataset, and Fig. 6-(b1) is the feature of the ground-truth query labels on RefCOCO/+/g val-
+
+TABLE VIII THE PROPORTION OF THE REFCOCO DATASET’S MOST UNRELIABLE
+DATA (r = 0) IN THE THREE PSEUDO-LABEL SOURCES, WHICH IS MEASURED BY SOURCE-SPECIFIC RELIABILITY (SR).
+
+Item
+
+tmp. label rel. label cap. label
+
+expression num num of most unreliable labels proportion
+
+95982 5296 5.52%
+
+156897 33473 21.33%
+
+60797 12330 20.28%
+
+(a) Training loss in RefCOCOg
+
+1.6
+
+h = 0.9
+
+h = 0.8
+
+1.4
+
+h = 0.7 h = 0.6
+
+1.2
+
+h = 0.5 h = 0.4
+
+1.0
+
+h = 0.3 h = 0.2
+
+0.8
+
+h = 0.1 h = 0.0
+
+0.6
+
+0.4
+0 20 40epo6c0h 80 100
+
+(b) P-R Curve
+
+0.78
+
+0.76
+
+0.74
+
+0.72
+
+0.70
+
+0.68
+
+0.66
+
+gref-val
+
+0.64 0.62
+
+gref_umd-val gref_umd-test
+0.0 0R.e1l0ia.2b0il.i3ty0.4th0r.e5s0h.6o0ld.7(0h.8)
+
+0.9
+
+Fig. 8. The result with reliability threshold h from 0.9 to 0 during the execution of SSA algorithm on the three splits (gref-val/gref-umd-val/gref-umd-test) of RefCOCOg dataset in the fully supervised setting. (a) Convergence curve, and (b) P-R curve.
+
+idation split, which respectively shows the feature distribution discrepancy among the three pseudo-label sources and the three ground-truth query labels. Fig. 6-(a2)-(a4) and Fig. 6(b2)-(b4) are the feature distribution comparison of three pseudo-label sources and the ground-truth query labels before and after using MSA on RefCOCO/+/g datasets, respectively. Before the execution of MSA, the distribution of the pseudolanguage labels and the ground-truth query labels is quite different, but after the execution of MSA, the distribution discrepancy significantly becomes smaller. This shows that
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+11
+
+(a) ambiguous expressions
+
+(b) incorrect detection (c) incomplete-defined templates (d) remote vocabulary
+
+Fig. 9. Examples of most unreliable data in pseudo-template labels. The percentage following the label indicates the Reliability value, as do Figs. 10 and 11. (Best view in color and zoom in.)
+
+(a) ambiguous expressions
+
+(b) insignificant or small-scale objects
+
+Fig. 10. Examples of most unreliable data in pseudo-relation labels. (Best view in color and zoom in.)
+
+(a) expressions describing the entire image Fig. 11. Examples of most unreliable data in pseudo-caption labels. (Best view in color and zoom in.)
+
+(b) matching error
+
+TABLE IX PERFORMANCE IMPROVEMENT OF SINGLE-SOURCE SELF-PACED CURRICULUM ADAPTING (SSA) ALGORITHM IN FULLY SUPERVISED SETTING ON REFCOCO/+/G DATASETS. w/o REPRESENTS ‘WITHOUT’, w.
+REPRESENTS ‘WITH’.
+
+Method
+
+RefCOCO val testA testB
+
+RefCOCO+
+
+RefCOCOg
+
+val testA testB val-g val-u test-u
+
+TransVG [5] TransVG w. SSA
+QRNet [28] QRNet w. SSA
+CLIP-VG w/o SSA CLIP-VG w. SSA
+
+80.49 81.47
+84.01 84.21
+84.11 84.29
+
+83.28 83.87
+85.85 86.62
+87.63 87.76
+
+75.24 75.74
+82.34 82.38
+78.13 78.43
+
+66.39 66.66
+72.94 73.16
+68.45 69.55
+
+70.55 71.95
+76.17 76.56
+77.14 77.33
+
+57.66 57.71
+63.81 64.86
+56.44 57.62
+
+66.35 68.68
+71.89 73.38
+72.43 72.64
+
+67.93 68.48
+73.03 74.11
+72.08 73.18
+
+67.44 68.51
+72.52 72.61
+72.02 72.54
+
+the Reliability threshold from 0.9 to 0. In Fig. 7-(a), the higher value of h leads to faster model convergence and the smaller converged loss. For the P-R curve in Fig. 7-(b), the model achieves performance saturation in range of [0.4, 0.6], which is the reason for h0 set 0. Analysis of Most Unreliable Data. The most unreliable data is represented by r = 0. As shown in Fig. 7-(b), when h approaches 0, the accuracy decreases significantly. Our algorithm filters out the most unreliable data as demonstrated in Tab. VIII, thus preventing its harmful effects.
+
+MSA can effectively select pseudo-labels that are more reliable or closer to the distribution of ground-truth query labels.
+Performance-Reliability (P-R) Curve and Convergence. During the greedy sample selection in SSA and MSA algorithms, we sample the pseudo-labels that have reliability values belonging to the interval [h, 1.0] of the Reliability Histogram Hi∗j∗ , and then add the selected samples to the subset Dχ to construct a temporary subset, where Dχ is the whole set of selected pseudo samples before current SSA or MSA step. We draw the Performance Reliability (P-R) curve to reflect the performance of the model trained by the temporary subset obtained with different values of the reliability threshold h. The greedy sample selection aims to find the reliability threshold corresponding to a local extreme point on the P-R curve to balance the reliable and unreliable pseudo-labels.
+Fig. 7 illustrates the training loss and performance curve during the execution of greedy sample selection in SSA with
+
+E. Application of SSA in Fully Supervised Setting
+Performance of SSA in Fully Supervised VG. We use CLIPVG, TransVG [5], and QRNet [28] as baseline models to verify the effectiveness of Single-source Self-paced Adapting algorithm (SSA) under the fully supervised setting. As shown in Tab. IX, the SSA can further improve the original model’s performance in most cases.
+Convergence Analysis. Fig. 8-(a) illustrates the training loss curve during the execution of SSA on refCOCOg dataset with Reliability threshold h ranging from 0.9 to 0, where a higher value of h leads to faster model convergence and smaller converged loss.
+Performance-Reliability (P-R) Curve. As the P-R curve in Fig. 8-(b) shows, the model achieves performance saturation in the range of [0.05, 0.25], which provides a prior for the SSA algorithm in the fully supervised setting, that is h0 should be
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+12
+
+set to 0.2. It should be noted that due to the high quality of the manual annotation, the performance saturation point (i.e., 0.2) of the reliability threshold is smaller than that of the pseudolabels (i.e., 0.5). The accuracy will suffer a decrease when the Reliability threshold gets closer to 0, which to some extent reflects that there is still a certain proportion of unreliable samples in the manually labeled annotations [51]. This indicates the boundaries of performance on RefCOCO/+/g datasets.
+
+balance between reliable and unreliable labels, we exclude the latter and do not further utilize them, even though they still contain valuable information. Furthermore, the greedy sample selection strategy employed in both SSA and MSA represents a trade-off between training cost and optimal solution. These can be further explored in future research.
+VI. CONCLUSION
+
+F. Qualitative Analysis of Unreliable Pseudo-language Labels
+In this section, we study the most unreliable pseudolanguage labels that have been successfully filtered and eliminated by our SSA and MSA algorithms, while also providing visual representations of these most unreliable data.
+As shown in Tab. VIII, a large number of pseudo-labels are concentrated at Reliability r = 0, which significantly reduces the model’s performance (as the P-R curve shown in Fig. 7). When r = 0, it means that the referred region cannot be localized, which seriously hinders the model from acquiring correct knowledge. By using SSA and MSA to eliminate these unreliable data points, both pseudo-labels and manually annotated data can further improve the model’s performance. The specific most unreliable pseudo-language labels (r = 0) are shown in Figs. 9 to 11.
+In the pseudo-template label (Fig. 9), we roughly divide the unreliable data into four categories: (a) ambiguous expressions, i.e., lack of uniqueness; (b) wrong labels caused by incorrect detection results; (c) incomplete prior information (for example, the spatial relationship defined in Pseudo-Q, e.g., ‘front’, ‘middle’, ‘bottom’ are not accurate); (d) other issues, such as remote vocabulary, insignificant or small-scale objects, etc.
+In the pseudo-relation label (Fig. 10), we roughly divide the unreliable data into (a) ambiguous expressions, and (b) insignificant or small-scale objects.
+In the pseudo-caption label (Fig. 11), we roughly divide the unreliable data into (a) the pseudo-language labels describing the entire image, and (b) mismatches between bounding boxes and captions.
+Among the various types of unreliable pseudo-language labels, referring to ambiguity is more frequent, particularly in images with similar classification objects. If future research aims to further enhance model performance, addressing ambiguity is a critical issue.
+V. DISCUSSION
+Explanation of Performance Gains. The key to completing the grounding task lies in comprehending the correspondence between language expression and image regions. Our approach introduces pseudo-language labels and pseudo-label quality measurement for unsupervised settings. The SSA and MSA algorithms achieve an optimal balance between reliable and unreliable pseudo-labels, resulting in more stable learning of the CLIP-based visual grounding model, which significantly improves the model’s generalization.
+Limitations. We have introduced three types of pseudolabels, but their quality remains low. In order to strike a
+
+In this paper, we propose a novel CLIP-VG method that enables the unsupervised transfer of CLIP to the grounding task by incorporating pseudo-language labels. This is the first attempt to apply the concept of self-paced curriculum adapting to visual grounding. As downstream vision and language contexts continue to evolve, multiple sources of pseudo-labeling are likely to become a future trend. Our proposed multi-source pseudo-language labels and the curriculum adapting method offer a fresh perspective for future research. The idea of our approach is simple yet effective, and it may be used as a plugin in various cross-modal pseudo-labeling tasks in the future.
+REFERENCES
+[1] Y. Qiao, C. Deng, and Q. Wu, “Referring expression comprehension: A survey of methods and datasets,” IEEE Transactions on Multimedia, vol. 23, pp. 4426–4440, 2020.
+[2] J. Mao, J. Huang, A. Toshev, O. Camburu, A. L. Yuille, and K. Murphy, “Generation and comprehension of unambiguous object descriptions,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2016.
+[3] L. Yu, P. Poirson, S. Yang, A. C. Berg, and T. L. Berg, “Modeling context in referring expressions,” in Computer Vision–ECCV 2016: 14th European Conference, Amsterdam, The Netherlands, October 11-14, 2016, Proceedings, Part II 14. Springer, 2016, pp. 69–85.
+[4] R. Hu, H. Xu, M. Rohrbach, J. Feng, K. Saenko, and T. Darrell, “Natural language object retrieval,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2016.
+[5] J. Deng, Z. Yang, T. Chen, W. Zhou, and H. Li, “Transvg: End-to-end visual grounding with transformers,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2021.
+[6] S. Antol, A. Agrawal, J. Lu, M. Mitchell, D. Batra, C. L. Zitnick, and D. Parikh, “Vqa: Visual question answering,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2015.
+[7] P. Anderson, Q. Wu, D. Teney, J. Bruce, M. Johnson, N. Su¨nderhauf, I. Reid, S. Gould, and A. Van Den Hengel, “Vision-and-language navigation: Interpreting visually-grounded navigation instructions in real environments,” in Proceedings of the IEEE conference on computer vision and pattern recognition, 2018, pp. 3674–3683.
+[8] X. Chen, L. Ma, J. Chen, Z. Jie, W. Liu, and J. Luo, “Real-time referring expression comprehension by single-stage grounding network,” arXiv preprint arXiv:1812.03426, 2018.
+[9] Y. Liao, S. Liu, G. Li, F. Wang, Y. Chen, C. Qian, and B. Li, “A realtime cross-modality correlation filtering method for referring expression comprehension,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2020.
+[10] R. Hong, D. Liu, X. Mo, X. He, and H. Zhang, “Learning to compose and reason with language tree structures for visual grounding,” IEEE transactions on pattern analysis and machine intelligence, vol. 44, no. 2, pp. 684–696, 2019.
+[11] R. Hu, M. Rohrbach, J. Andreas, T. Darrell, and K. Saenko, “Modeling relationships in referential expressions with compositional modular networks,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2017.
+[12] D. Liu, H. Zhang, F. Wu, and Z.-J. Zha, “Learning to assemble neural module tree networks for visual grounding,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2019.
+[13] M. Sun, J. Xiao, E. G. Lim, and Y. Zhao, “Cycle-free weakly referring expression grounding with self-paced learning,” IEEE Transactions on Multimedia, 2021.
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+13
+
+[14] Y. Wang, J. Deng, W. Zhou, and H. Li, “Weakly supervised temporal adjacent network for language grounding,” IEEE Transactions on Multimedia, vol. 24, pp. 3276–3286, 2021.
+[15] K. Chen, J. Gao, and R. Nevatia, “Knowledge aided consistency for weakly supervised phrase grounding,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2018.
+[16] S. Datta, K. Sikka, A. Roy, K. Ahuja, D. Parikh, and A. Divakaran, “Align2ground: Weakly supervised phrase grounding guided by imagecaption alignment,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2019.
+[17] T. Gupta, A. Vahdat, G. Chechik, X. Yang, J. Kautz, and D. Hoiem, “Contrastive learning for weakly supervised phrase grounding,” in Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part III. Springer, 2020, pp. 752–768.
+[18] Y. Liu, B. Wan, L. Ma, and X. He, “Relation-aware instance refinement for weakly supervised visual grounding,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2021.
+[19] L. Wang, J. Huang, Y. Li, K. Xu, Z. Yang, and D. Yu, “Improving weakly supervised visual grounding by contrastive knowledge distillation,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2021.
+[20] R. A. Yeh, M. N. Do, and A. G. Schwing, “Unsupervised textual grounding: Linking words to image concepts,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2018.
+[21] J. Wang and L. Specia, “Phrase localization without paired training examples,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2019.
+[22] H. Shi, M. Hayat, and J. Cai, “Unpaired referring expression grounding via bidirectional cross-modal matching,” arXiv preprint arXiv:2201.06686, 2022.
+[23] H. Jiang, Y. Lin, D. Han, S. Song, and G. Huang, “Pseudo-q: Generating pseudo language queries for visual grounding,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2022, pp. 15 513–15 523.
+[24] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al., “Learning transferable visual models from natural language supervision,” in International conference on machine learning. PMLR, 2021, pp. 8748–8763.
+[25] W. Wang, H. Bao, L. Dong, J. Bjorck, Z. Peng, Q. Liu, K. Aggarwal, O. K. Mohammed, S. Singhal, S. Som et al., “Image as a foreign language: Beit pretraining for all vision and vision-language tasks,” arXiv preprint arXiv:2208.10442, 2022.
+[26] S. Kazemzadeh, V. Ordonez, M. Matten, and T. Berg, “Referitgame: Referring to objects in photographs of natural scenes,” in Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP), 2014, pp. 787–798.
+[27] B. A. Plummer, L. Wang, C. M. Cervantes, J. C. Caicedo, J. Hockenmaier, and S. Lazebnik, “Flickr30k entities: Collecting region-to-phrase correspondences for richer image-to-sentence models,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2015.
+[28] J. Ye, J. Tian, M. Yan, X. Yang, X. Wang, J. Zhang, L. He, and X. Lin, “Shifting more attention to visual backbone: Query-modulated refinement networks for end-to-end visual grounding,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2022, pp. 15 502–15 512.
+[29] C.-H. Ho, S. Appalaraju, B. Jasani, R. Manmatha, and N. Vasconcelos, “Yoro-lightweight end to end visual grounding,” in Computer Vision– ECCV 2022 Workshops: Tel Aviv, Israel, October 23–27, 2022, Proceedings, Part VIII. Springer, 2023, pp. 3–23.
+[30] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems, vol. 30, 2017.
+[31] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly et al., “An image is worth 16x16 words: Transformers for image recognition at scale,” arXiv preprint arXiv:2010.11929, 2020.
+[32] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and S. Zagoruyko, “End-to-end object detection with transformers,” in Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part I 16. Springer, 2020, pp. 213–229.
+[33] A. Sadhu, K. Chen, and R. Nevatia, “Zero-shot grounding of objects from natural language queries,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2019.
+
+[34] Z. Yang, T. Chen, L. Wang, and J. Luo, “Improving one-stage visual grounding by recursive sub-query construction,” in Computer Vision– ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part XIV 16. Springer, 2020, pp. 387–404.
+[35] L. Yu, Z. Lin, X. Shen, J. Yang, X. Lu, M. Bansal, and T. L. Berg, “Mattnet: Modular attention network for referring expression comprehension,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2018.
+[36] P. Wang, Q. Wu, J. Cao, C. Shen, L. Gao, and A. v. d. Hengel, “Neighbourhood watch: Referring expression comprehension via languageguided graph attention networks,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2019.
+[37] A. Kamath, M. Singh, Y. LeCun, G. Synnaeve, I. Misra, and N. Carion, “Mdetr-modulated detection for end-to-end multi-modal understanding,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2021, pp. 1780–1790.
+[38] F. Xiao, L. Sigal, and Y. Jae Lee, “Weakly-supervised visual grounding of phrases with linguistic structures,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2017.
+[39] M. Sun, J. Xiao, E. G. Lim, S. Liu, and J. Y. Goulermas, “Discriminative triad matching and reconstruction for weakly referring expression grounding,” IEEE transactions on pattern analysis and machine intelligence, vol. 43, no. 11, pp. 4189–4195, 2021.
+[40] H. Zhu, A. Sadhu, Z. Zheng, and R. Nevatia, “Utilizing every image object for semi-supervised phrase grounding,” in Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision, 2021, pp. 2210–2219.
+[41] S.-H. Chou, Z. Fan, J. J. Little, and L. Sigal, “Semi-supervised grounding alignment for multi-modal feature learning,” in 2022 19th Conference on Robots and Vision (CRV). IEEE, 2022, pp. 48–57.
+[42] S. Subramanian, W. Merrill, T. Darrell, M. Gardner, S. Singh, and A. Rohrbach, “Reclip: A strong zero-shot baseline for referring expression comprehension,” in Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), 2022, pp. 5198–5215.
+[43] J. Li, G. Shakhnarovich, and R. A. Yeh, “Adapting clip for phrase localization without further training,” arXiv preprint arXiv:2204.03647, 2022.
+[44] J. Lin, R. Men, A. Yang, C. Zhou, Y. Zhang, P. Wang, J. Zhou, J. Tang, and H. Yang, “M6: Multi-modality-to-multi-modality multitask megatransformer for unified pretraining,” in Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining, 2021, pp. 3251–3261.
+[45] J. Li, R. Selvaraju, A. Gotmare, S. Joty, C. Xiong, and S. C. H. Hoi, “Align before fuse: Vision and language representation learning with momentum distillation,” Advances in neural information processing systems, vol. 34, pp. 9694–9705, 2021.
+[46] P. Wang, A. Yang, R. Men, J. Lin, S. Bai, Z. Li, J. Ma, C. Zhou, J. Zhou, and H. Yang, “Unifying architectures, tasks, and modalities through a simple sequence-to-sequence learning framework,” arXiv preprint arXiv:2202.03052, 2022.
+[47] F. Peng, X. Yang, L. Xiao, Y. Wang, and C. Xu, “Sgva-clip: Semanticguided visual adapting of vision-language models for few-shot image classification,” IEEE Transactions on Multimedia, 2023.
+[48] Y. Bengio, J. Louradour, R. Collobert, and J. Weston, “Curriculum learning,” in Proceedings of the 26th annual international conference on machine learning, 2009, pp. 41–48.
+[49] Y. Shu, Z. Cao, M. Long, and J. Wang, “Transferable curriculum for weakly-supervised domain adaptation,” in Proceedings of the AAAI Conference on Artificial Intelligence, vol. 33, no. 01, 2019, pp. 4951– 4958.
+[50] P. Soviany, R. T. Ionescu, P. Rota, and N. Sebe, “Curriculum learning: A survey,” International Journal of Computer Vision, pp. 1–40, 2022.
+[51] X. Wang, Y. Chen, and W. Zhu, “A survey on curriculum learning,” IEEE Transactions on Pattern Analysis and Machine Intelligence, 2021.
+[52] J. Choi, M. Jeong, T. Kim, and C. Kim, “Pseudo-labeling curriculum for unsupervised domain adaptation,” arXiv preprint arXiv:1908.00262, 2019.
+[53] P. Cascante-Bonilla, F. Tan, Y. Qi, and V. Ordonez, “Curriculum labeling: Revisiting pseudo-labeling for semi-supervised learning,” in Proceedings of the AAAI Conference on Artificial Intelligence, vol. 35, no. 8, 2021, pp. 6912–6920.
+[54] L. Zhang, Z. Mao, B. Xu, Q. Wang, and Y. Zhang, “Review and arrange: Curriculum learning for natural language understanding,” IEEE/ACM Transactions on Audio, Speech, and Language Processing, vol. 29, pp. 3307–3320, 2021.
+
+IEEE TRANS. ON MULTIMEDIA, VOL. XX, NO. XX, MAY 2023
+
+14
+
+[55] Y. Tay, S. Wang, A. T. Luu, J. Fu, M. C. Phan, X. Yuan, J. Rao, S. C. Hui, and A. Zhang, “Simple and effective curriculum pointergenerator networks for reading comprehension over long narratives,” in Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, 2019, pp. 4922–4931.
+[56] C. Gong, D. Tao, S. J. Maybank, W. Liu, G. Kang, and J. Yang, “Multimodal curriculum learning for semi-supervised image classification,” IEEE Transactions on Image Processing, vol. 25, no. 7, pp. 3249–3260, 2016.
+[57] S. Zhao, Z. Zhang, S. Schulter, L. Zhao, A. Stathopoulos, M. Chandraker, D. Metaxas et al., “Exploiting unlabeled data with vision and language models for object detection,” arXiv preprint arXiv:2207.08954, 2022.
+[58] M. Kumar, B. Packer, and D. Koller, “Self-paced learning for latent variable models,” Advances in neural information processing systems, vol. 23, 2010.
+[59] R. Girshick, “Fast r-cnn,” in Proceedings of the IEEE international conference on computer vision, 2015, pp. 1440–1448.
+[60] H. Rezatofighi, N. Tsoi, J. Gwak, A. Sadeghian, I. Reid, and S. Savarese, “Generalized intersection over union: A metric and a loss for bounding box regression,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, 2019, pp. 658–666.
+[61] Y. Cong, M. Y. Yang, and B. Rosenhahn, “Reltr: Relation transformer for scene graph generation,” arXiv preprint arXiv:2201.11460, 2022.
+[62] M. Cornia, M. Stefanini, L. Baraldi, and R. Cucchiara, “Meshed-memory transformer for image captioning,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, 2020, pp. 10 578–10 587.
+[63] R. Mokady, A. Hertz, and A. H. Bermano, “Clipcap: Clip prefix for image captioning,” arXiv preprint arXiv:2111.09734, 2021.
+[64] Y. Yao, A. Zhang, Z. Zhang, Z. Liu, T.-S. Chua, and M. Sun, “Cpt: Colorful prompt tuning for pre-trained vision-language models,” arXiv preprint arXiv:2109.11797, 2021.
+[65] X. Liu, L. Li, S. Wang, Z.-J. Zha, D. Meng, and Q. Huang, “Adaptive reconstruction network for weakly supervised referring expression grounding,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2019.
+[66] X. Liu, L. Li, S. Wang, Z.-J. Zha, L. Su, and Q. Huang, “Knowledgeguided pairwise reconstruction network for weakly supervised referring expression grounding,” in Proceedings of the 27th ACM International Conference on Multimedia, 2019, pp. 539–547.
+[67] M. Li and L. Sigal, “Referring transformer: A one-step approach to multi-task visual grounding,” Advances in Neural Information Processing Systems, vol. 34, pp. 19 652–19 664, 2021.
+[68] Y. Du, Z. Fu, Q. Liu, and Y. Wang, “Visual grounding with transformers,” in 2022 IEEE International Conference on Multimedia and Expo (ICME). IEEE, 2022, pp. 1–6.
+

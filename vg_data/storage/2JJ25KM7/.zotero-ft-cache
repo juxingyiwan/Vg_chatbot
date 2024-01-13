@@ -1,0 +1,782 @@
+1
+
+Learning Two-Branch Neural Networks for Image-Text Matching Tasks
+
+Liwei Wang, Yin Li, Jing Huang, Svetlana Lazebnik
+
+arXiv:1704.03470v4 [cs.CV] 1 May 2018
+
+Abstract—Image-language matching tasks have recently attracted a lot of attention in the computer vision ﬁeld. These tasks include image-sentence matching, i.e., given an image query, retrieving relevant sentences and vice versa, and region-phrase matching or visual grounding, i.e., matching a phrase to relevant regions. This paper investigates two-branch neural networks for learning the similarity between these two data modalities. We propose two network structures that produce different output representations. The ﬁrst one, referred to as an embedding network, learns an explicit shared latent embedding space with a maximum-margin ranking loss and novel neighborhood constraints. Compared to standard triplet sampling, we perform improved neighborhood sampling that takes neighborhood information into consideration while constructing mini-batches. The second network structure, referred to as a similarity network, fuses the two branches via element-wise product and is trained with regression loss to directly predict a similarity score. Extensive experiments show that our networks achieve high accuracies for phrase localization on the Flickr30K Entities dataset and for bi-directional image-sentence retrieval on Flickr30K and MSCOCO datasets.
+Index Terms—Deep Learning, Cross-Modal Retrieval, Image-Sentence Retrieval, Phrase Localization, Visual Grounding
+!
+
+1 INTRODUCTION
+
+C OMPUTER vision is moving from predicting discrete, categorical labels to generating rich descriptions of visual data, in particular, in the form of natural language. We are witnessing a surge of interest in tasks that involve cross-modal learning from image and text data, widely viewed as the “next frontier” of scene understanding. For example, in bi-directional image-sentence search [1], [2], [3] one aims to retrieve the corresponding images given a sentence query, and vice versa. Image captioning [4], [5], [6] is the task of generating a natural language description of an input image. Motivated by the notion of creating a visual Turing test, Visual Question Answering (VQA) [7], [8], [9] aims at answering freeform questions about image content. Visual grounding tasks like referring expression understanding [10], [11] and phrase localization [12] ﬁnd image regions indicated by questions, phrases, or sentences. To support these tasks, a number of large-scale datasets and benchmarks have recently been proposed, including MSCOCO [13] and Flickr30K [14] datasets for image captioning, Flickr30K Entities [12] for phrase localization, the Visual Genome dataset [15] for localized textual description of images, and the VQA dataset [7] for question answering.
+We study neural architectures for a core problem underlying most image-text tasks—how to measure the semantic similarity between visual data, e.g., images or regions, and text data, e.g., sentences or phrases. Learning this similarity requires connecting low-level pixel values and high-level language descriptions. Figure 1 shows an example of a phrase
+• Liwei Wang, Jing Huang and Svetlana Lazebnik are with the Computer Science Department, University of Illinois at Urbana-Champaign, Urbana, IL 61801. E-mail: lwang97@illinois.edu, jhuang81@illinois.edu and slazebni@illinois.edu
+• Yin Li is with the School of Interactive Computing, Georgia Institute of Technology, Atlanta, GA, 30332.E-mail: yli440@gatech.edu
+
+description of an image region from the Flick30K Entities dataset. Matching the phrase “ﬁre pit” to its corresponding region requires not only distinguishing between the correct region and background clutter, but also understanding the difference between “ﬁre pit” and other visual concepts that might be present in the image. Naively, one might consider training binary or multi-class classiﬁers to estimate the probabilities of various concepts given image regions. However, the natural language vocabulary of visual concepts is very large, even if we restrict these concepts to nouns or simple noun phrases. Further, different concepts have complex semantic similarity relationships between them – for example, “ﬁre” and “ﬂame” are synonyms, “ﬁreplace” is similar in meaning but not identical to “ﬁre pit,” and attributes can modify the meaning of head nouns (“ﬁre pit” is not the same as “pit”). This suggests that, instead of representing different phrases using separate classiﬁers, representing text in a continuous “semantic” embedding space is more appropriate. Furthermore, the frequencies of different phrases are highly unbalanced: the word “ﬁre” only occurs three times in the Flickr30K Entities dataset, while the most common words, such as “man,” show up a few hundred times. For all these reasons, training separate per-concept classiﬁers is undesirable. A more natural approach is to design a model that takes in continuous image and text features (for the latter, derived from continuous word embeddings like word2vec [16]) and predicts a similarity score. This approach has the advantage of treating image and text symmetrically, enabling both image-to-text and text-to-image retrieval, and of being easily extendable from individual words and simple phrases to arbitrarily complex sentences, provided a continuous feature encoding for sentences can be devised.
+As suggested by the above discussion, the network architecture for these tasks should consist of two branches that take in image and text features respectively, pass them
+
+2
+
+Fig. 1. Taking the phrase localization task as an example, we show the architectures of the two-branch networks used in this paper. Left column: given the phrase “a ﬁre pit” from the image caption, sets of positive regions (purple) and negative regions (blue) are extracted from the training image. The positive regions are deﬁned as ones that have a sufﬁciently high overlap with the ground truth (dashed white rectangle). X and Y denote the feature vectors describing image regions and phrases, respectively. In this paper, X are features extracted from pre-trained VGG networks, and Y are orderless Fisher Vector text features [2]. Middle: the embedding network. Each branch consists of fully connected (FC) layers with ReLU nonlinearities between them, followed by L2 normalization at the end. We train this network with a maximum-margin triplet ranking loss that pushes positive pairs closer to each other and negative pairs farther (Section 3.2). Right: the similarity network. As in the embedding network, the branches consist of two fully connected layers followed by L2 normalization. Element-wise product is used to aggregate features from two branches, followed by several additional fully connected (FC) layers. The similarity network is trained with the logistic regression loss function, with positive and negative image-text pairs receiving labels of “+1” and “-1” respectively (Section 3.3).
+
+through one or more layers of transformations, fuse them, and eventually output a learned similarity score. At a conceptual level, there are two ways to obtain this score. One is to train the network to map images and text into an explicit joint embedding space in which corresponding samples from the two modalities lie close to one another, and imagetext similarity is given by cosine similarity or Euclidean distance. The second approach is to frame image/text correspondence as a binary classiﬁcation problem: given an image/text pair, the goal is to output the probability that the two items match. Accordingly, we propose two variants of two-branch networks that follow these two strategies (Figure 1): the embedding network and the similarity network.
+Embedding Network: The goal of this network is to map image and text features, which may initially have different dimensions, to a joint latent space of common dimensionality in which matching image and text features have high cosine similarity. Each branch passes the data through two layers with nonlinearities, followed by L2 normalization, so that cosine similarity is equivalent to Euclidean distance. We train the network with a bi-directional ranking loss that enforces that matched sample pairs should have smaller distance than unmatched ones in the embedding space. We also propose augmenting this loss with neighborhood information in each modality via novel triplet constraints and sampling strategy. In particular, where different phrases
+
+or sentences can be used to describe the same image or region, we force them to be close to each other. We argue that adding these constraints can help to regularize the learning of the embedding space, especially facilitating matching within the same modality, i.e., sentence-tosentence retrieval.
+Similarity Network: In our alternative architecture, image and text data is also passed through branches with two layers with nonlinearities, but then, element-wise product is used to aggregate features from the two branches into a single vector, followed by a further series of fully connected layers. This network is trained with logistic regression loss to match the output score to +1 for positive pairs and −1 for negative pairs. This network is notably simpler but also less ﬂexible than our embedding network, as it no longer has an explicit embedding space and cannot encode structural constraints. However, it still achieves comparable performance on the phrase localization task.
+Our contributions can be summarized as follows:
+• We propose state-of-the-art embedding and similarity networks for learning the correspondence between image and text data for two tasks: phrase localization (given a phrase, ﬁnd a corresponding bounding box in the image) and bi-directional image-sentence search (given a query image/sentence, retrieve matching sentences/images from a database).
+
+3
+
+• We systematically investigate all important components of both embedding and similarity networks, including loss functions, feature fusion strategies, and different ways of sampling positive and negative examples to form mini-batches during training.
+• For the embedding network, we show how to take advantage of within-modality neighborhood structure via additional loss terms and a novel triplet sampling strategy, which can improve the accuracy of within-modality retrieval as well.
+• We obtain state-of-the-art accuracies on phrase localization on the Flickr30K Entities dataset [12], and near state-of-the-art accuracies on bi-directional image-sentence retrieval on Flickr30K [14] and MSCOCO [17] datasets.1
+A previous version of our embedding network was published in CVPR 2016 [19]. In this journal paper, we add the similarity network as a counterpoint to the embedding network, conduct more in-depth experiments, and signiﬁcantly improve the absolute accuracies on both tasks. Our two-branch networks are very general and can be modiﬁed and applied to other image-text tasks. For example, our embedding architecture has already been used by [20] for modeling referring expressions.
+Section 2 covers the related work on learning from visual and text data. Section 3 presents our embedding and similarity networks. Sections 4 and 5 describe our experiments on phrase localization and image-sentence retrieval. Finally, Section 6 concludes with a summary of ﬁndings and a discussion of important future research directions.
+2 RELATED WORK
+CCA-based methods. One of the most popular baselines for image-text embedding is Canonical Correlation Analysis (CCA), which ﬁnds linear projections that maximize the correlation between projected vectors from the two views [21], [22]. Recent works using it include [2], [3], [23]. To obtain a nonlinear embedding, other works have opted for kernel CCA [21], [24], which ﬁnds maximally correlated projections in reproducing kernel Hilbert spaces with corresponding kernels. Despite being a classic textbook method, CCA has turned out to be a surprisingly powerful baseline. Klein et al. [2] showed that properly normalized CCA [23] with stateof-the-art image and text features can outperform much more complicated models. The main disadvantage of CCA is its high memory cost, as it requires loading all the data into memory to compute the data covariance matrix.
+Deep multimodal representations. To extend CCA to learning nonlinear projections and improve its scalability to large training sets, Andrew et al. [25] and Yan and Mikolajczyk [26] proposed to cast CCA into a deep learning framework. Their methods are trained using stochastic gradient descent (SGD) and thus can be applied to large-scale datasets. However, as pointed out in [27], SGD cannot guarantee a good solution to the generalized eigenvalue problem at the heart of CCA because covariance estimation in each
+1. In the last few months, following the conclusion of our experiments, we have become aware of some new methods that achieve better Recall@1 [18].
+
+minibatch is unstable. Our proposed networks share a similar two-branch architecture with deep CCA models [25], [26], but they are much more stable and accurate.
+Apart from deep CCA, many other deep learning methods have been proposed for joint modeling of multiple modalities. Some of the earlier techniques have included restricted Boltzmann machines and autoencoders [28], [29]. For image-text tasks, recurrent text representations are the most popular among current approaches [30], [31], [32], [33], [34]. Unlike these works, we rely primarily on hand-crafted orderless text features from [2]. Our experiments of Section 5 will show that these features perform similarly to LSTMs for image-sentence matching, which seems to suggest that bag-of-words information is sufﬁcient for cross-modal tasks that do not involve generation of novel text, at least given the current state of image-text models.
+Ranking-based methods. Some of the most successful multi-modal methods, whether they be linear models or deep networks, are trained with a ranking loss. For example, WSABIE [35] and DeVISE [36] learn linear transformations of visual and text features into a shared space using a single-directional ranking loss, which applies a margin-based penalty to an incorrect annotation when it gets ranked higher than a correct one for describing an image. A bidirectional ranking loss adds the missing link in the opposite direction: It further ensures that for each annotation, the corresponding image gets ranked higher than unrelated images [1], [32], [37]. Our embedding network is also trained using bi-directional loss, but we carefully explore a number of implementation choices, resulting in a model that can signiﬁcantly outperform CCA-based methods and scale to large datasets.
+Metric learning and Siamese networks. In our conference paper introducing the embedding network [19], in addition to the bi-directional ranking loss, we proposed constraints that preserve neighborhood structure within each individual view. Speciﬁcally, in the learned latent space, we want images (resp. sentences) with similar meaning to be close to each other. Such within-view neighborhood preservation constraints have been extensively explored in the metric learning literature [38], [39], [40], [41], [42], [43]. In particular, the Large Margin Nearest Neighbor (LMNN) approach [42] tries to ensure that for each image its target neighbors from the same class are closer than samples from other classes. As our work will show, these constraints are also helpful for the cross-view matching task, and for training models that can achieve high accuracy both for cross-view and within-view matching.
+Our two-branch networks are related to Siamese networks for metric learning [44], [45], [46], [47], [48], [49]. However, instead of learning a similarity function between two instances from the same modality using tied weights, we learn the embedding space across two different modalities with asymmetric branches. Classiﬁcation-based methods. Learning the similarity between images and text can be also modeled as classiﬁcation. Deep models can be designed to answer whether two input visual and text samples match each other [9], [50], [51]. For example, Jabri et al. [9] used a softmax function to predict whether the input image and question match with
+
+4
+
+the answer choice for VQA. Ba et al. [50] trained a twobranch network using classiﬁcation loss to match visual and text data for zero-shot learning. Rohrbach et al. [52] used a softmax function to estimate the posterior probability of a phrase over all the available region proposals in an image. To fuse region and phrase features, they performed a linear transformation in each branch, followed by sum, followed by a ReLU nonlinearity and a fully connected (FC) layer. In a subsequent work, Fukui et al. [51] systematically investigated multiple feature fusion strategies and found elementwise product to be among the most effective. They then proposed a novel Multimodal Compact Bilinear Pooling (MCB) approach that slightly outperformed element-wise product. However, MCB has a high memory cost, necessitating the use of sketch approximations. Like [52], MCB uses softmax to map a phrase to a the single best region proposal from the image, with all the other regions (including ones having a high overlap with the ground truth) designated as negatives.
+Our second network type, the similarity network, also builds on the idea of directly predicting similarity between a phrase and a region through classiﬁcation. However, instead of softmax loss, we use non-exclusive logistic regression loss and treat each phrase-region pair as an independent binary classiﬁcation problem – that is, for a given phrase, more than one region in the same image can be positive. At training time, this allows us to augment the ground truth region for a phrase with other positive examples having a high overlap with it. As our experiments in Section 4 will show, this positive data augmentation strategy plays a much more important role in improving performance than the fusion strategy, allowing us to outperform MCB using much simpler element-wise product.
+3 EMBEDDING AND SIMILARITY NETWORKS
+3.1 Overview of Image-Text Tasks
+In this paper, we focus on two image-text tasks: phrase localization and image-sentence retrieval. Phrase localization [12], also known as text-to-image reference resolution or visual grounding, has recently received lots of attention [12], [19], [51]. Our deﬁnition of phrase localization follows [12]: given an image and an entity mention, i.e. noun phrase, taken from a sentence description that goes with that image, the goal is to predict the corresponding bounding box. We solve this task in a retrieval framework: Given the entity mention, we rank a few hundred candidate regions output by a separate region proposal method (e.g., EdgeBox [53]) using the similarity score produced by one of our trained networks. Our embedding network computes cosine similarity scores between input phrase and candidate regions in the shared embedding space, while our similarity network directly output similarity scores via regression.
+Our second task, bi-directional image-sentence retrieval, refers both to image-to-sentence and sentence-to-image search. The deﬁnitions of the two scenarios are straightforward: given an input image (resp. sentence), the goal is to ﬁnd the best matching sentences (resp. images) from a database. Both scenarios are handled identically by nearest neighbor search in the latent image-sentence embedding space. Our embedding network is the most appropriate for
+
+this task, as it directly optimizes the bi-directional ranking loss.
+Sections 3.2 and 3.3 will explain the details of our two networks, their objective functions, and training procedures.
+In the following, X and Y will denote the collections of training images and sentences or training regions and phrases, each encoded according to their own feature representation, and x ∈ X and y ∈ Y will denote individual image and text features. From now on, unless stated otherwise, when we use the term “image and text,” it applies equally to “image and sentence” or “region and phrase.”
+
+3.2 Embedding Network
+3.2.1 Network Architecture
+The embedding network, illustrated in Figure 1 (middle), has two branches, each composed of a series of fully connected (FC) layers, separated by Rectiﬁed Linear Unit (ReLU) nonlinearities. We apply batch normalization [54] right after the last FC layer (without ReLU) to improve the convergence during training. The output vectors are further normalized by their L2 norm for efﬁcient computation of Euclidean distance.
+The embedding architecture is highly ﬂexible. The two branches can have different numbers of layers. The inputs can be either pre-computed features or outputs of other networks (e.g. CNNs or RNNs), and back-propagation of gradients to the input networks is possible. In our work, we focus on investigating the behavior of the two-branch networks and thus stick to pre-computed image and text features, which already give us state-of-the-art results.
+
+3.2.2 Learning Cross-Modal Matching by Ranking
+The embedding network is trained using stochastic gradient descent with a margin-based loss that encodes both bi-directional ranking constraints and neighborhoodpreserving constraints within each modality. This section will discuss the design of our loss function and the strategy of sampling triplets for stochastic gradient descent.
+Bi-directional ranking loss. Given a visual input xi (a whole image or a region), let Yi+ and Yi− denote its sets of matching (positive) and non-matching (negative) text samples, respectively. If yj and yk are positive and negative samples for xi, we want the distance between xi and yj to be smaller than the distance between xi and yk, with a margin of m. This leads to the following triplet-wise constraint:
+
+d(xi, yj) + m < d(xi, yk) ∀yj ∈ Yi+, ∀yk ∈ Yi−.
+
+(1)
+
+Note that here and in the following, d(x, y) will denote the Euclidean distance between image and text features in the embedding space.
+Given a text input yi (a phrase or sentence), we have analogous constraints in the other direction:
+
+d(xj , yi ) + m < d(xk , yi ) ∀xj ∈ Xi+, ∀xk ∈ Xi−,
+
+(2)
+
+where Xi+ and Xi− denote the sets of matched (positive) and non-matched (negative) visual data for yi .
+
+5
+
+These ranking constraints can be converted into a
+
+We then add terms corresponding to the above con-
+
+margin-based loss function:
+
+straints to our baseline bi-directional ranking loss function
+
+in Eq. (3):
+
+L(X, Y ) = λ1 [m + d(xi, yj ) − d(xi, yk)]+
+
+i,j,k
+(3)
+
++ λ2
+
+[m + d(xj , yi ) − d(xk , yi )]+,
+
+i ,j ,k
+
+where [t]+ = max(0, t). Our bi-directional ranking loss sums over all triplets (a target instance, a positive match, and a negative match) deﬁned in constraints (1) and (2).For simplicity, we ﬁx the margin m = 0.05 for all terms in our image-sentence experiments. The weights λ1 and λ2 balance the strength of the ranking loss in each direction.
+Optimizing the loss function requires enumerating triplets, which can be computationally expensive, especially for large datasets. Similarly to [1], [32], [37], we use SGD to optimize the loss function and sample triplets within each mini-batch and our sampling strategy is loosely inspired by [40], [55]. Brieﬂy, for each positive image-text pair (x, y) in a mini-batch, we keep sampling triplets (x, y, y ) such that (x, y ) is a negative pair and (y, x, x ) such that (x , y) is a negative pair. Details of triplet sampling algorithms for the phrase localization and image-sentence retrieval tasks will be given in Sections 4.1 and 5.1.
+
+3.2.3 Preserving Neighborhood Structure within Modalities
+The many-to-many nature of correspondence for image-text tasks creates an additional aspect of complexity for training. For example, the same image region can be described by different phrases, while the same phrase can refer to different regions across the training set. These correspondences, in turn, induce neighborhood structure within each modality — which text (resp. image) pairs are similar because they correspond to the same image (resp. text) example. It is therefore interesting to see how this structure can help in learning the embedding.
+Neighborhood-preserving constraints. In our conference paper [19], we proposed adding “structure constraints” (now termed neighborhood constraints) to our loss function. Let N (xi) denote the neighborhood of xi, which is the set of images or regions described by the same text as xi. We would like to enforce a small margin of m between N (xi) and any data point x outside of the neighborhood:
+
+d(xi, xj) + m < d(xi, xk)
+
+(4)
+
+∀xj ∈ N (xi), ∀xk ∈ N (xi),
+
+Lst(X, Y ) = λ1 [m + d(xi, yj ) − d(xi, yk)]+
+i,j,k
+
++ λ2
+
+[m + d(xj , yi ) − d(xk , yi ]+,
+
+i ,j ,k
+
+(6)
+
++ λ3 [m + d(xi, xj ) − d(xi, xk)]+
+
+i,j,k
+
++ λ4
+
+[m + d(yi , yj ) − d(yi , yk )]+,
+
+i ,j ,k
+
+where the sums are over all triplets deﬁned in the constraints (1-2) and (4-5). The weights λ3 and λ4 control the regularization power of the neighborhood-preserving terms, and small values give the best performance.
+For phrase localization, we typically have multiple phrases corresponding to the same region (derived from multiple sentences corresponding to the same image), and multiple regions corresponding to the same phrase (these can be regions in different training images, or overlapping positive regions in the same image). Thus, both neighborhood-preserving terms given by Eqs. (4) and (5) are meaningful. However, for image-sentence retrieval, while each image is paired with multiple sentences, Flickr30K and MSCOCO datasets do not allow us to determine when the same sentence can apply to multiple images. Therefore, the image-view constraints (Eq. 4) cannot be applied.
+
+Neighborhood sampling. The use of neighborhoodpreserving constraints requires that the same mini-batch contain more than one positive match for each target sample, i.e., at least two texts that are matched to the same image and vice versa. To ensure this, after performing regular triplet sampling, for any target image feature x, we add new triplets to the mini-batch as necessary to ensure that there are at least two triplets (x, y1, y1) and (x, y2, y2) that pair the target x with different positive matches y1 and y2 – and analogously for any target text feature y. This is done by searching all positive pairs that contain x (resp. y), which can be pre-computed using hash tables with small run-time cost (see Algorithm 1 for details).
+In our original work [19], we introduced neighborhood sampling solely as a way to provide triplets upon which neighborhood constraints could be imposed. However, somewhat surprisingly, we have since found out that doing neighborhood sampling by itself, even without adding the corresponding terms to the objective function, already accounts for some improvements in image-sentence retrieval tasks. Accordingly, in Sections 4 and 5, we will evaluate the impact of our neighborhood sampling strategy apart from the constraints given by Eqs. (4) and (5).
+
+Analogously to (4), we also deﬁne the neighborhood constraints for the text side:
+
+d(yi , yj ) + m < d(yi , yk )
+
+(5)
+
+∀yj ∈ N (yi ), ∀yk ∈ N (yi ),
+
+where N (yi ) is the set of descriptions, e.g. phrases or sentences, for the same visual data.
+
+3.3 Similarity Network
+The complexity of the embedding network’s objective function and triplet sampling strategy motivates us to consider as an alternative a more straightforward classiﬁcation-based similarity network, shown on the right of Figure 1. It shares the same architecture of the two branches as the embedding network, including FC, ReLU, batch normalization and L2 normalization. The network then merges the output of the
+
+6
+
+two branches using element-wise product, followed by a series of FC and ReLU layers (we found three to give the best results).
+As discussed in Section 2, our use of element-wise product for fusion of the two branches is inspired by the corresponding baseline of Fukui et al. [51]. Other methods of fusion, e.g., concatenation, bilinear pooling, and compact bilinear pooling, can also be used in our network in principle. However, as shown in [51], element-wise product outperforms all other baseline strategies like concatenation, and typically comes within 1% of the much more complex multimodal compact bilinear pooling method that is the main contribution of [51]. As our phrase localization experiments (Table 1) will show, even with element-wise product, our similarity network can still outperform the full model of [51].
+For each input pair (xi, yj), the similarity network generates a score pij seeking to match the correct ground truth label (+1 for positive pairs and −1 for negative pairs). Our training objective is thus a logistic regression loss deﬁned over the samples {xi, yj, zij}, where zij = +1 if xi and yj match each other, and −1 otherwise:
+
+L(X, Y, Z) = log(1 + exp(−zijpij)) .
+
+(7)
+
+i,j
+
+To train the similarity network with SGD, we only need to sample positive and negative image-text pairs, which is much simpler and more efﬁcient than sampling triplets. The only subtlety we found is that it is necessary to balance the number of positive and negative pairs in each mini-batch. Otherwise, the network will be dominated by the large number of negative pairs. More speciﬁcally, we maintain an equal number of positives and negatives in every minibatch, though the sizes of different mini-batches can vary, especially for the phrase localization task. More details of the sampling and training algorithms will be covered in Sections 4 and 5.
+
+4 PHRASE LOCALIZATION EXPERIMENTS
+This section presents our experiments on the task of phrase localization on the Flickr30K Entities benchmark [12]. Flickr30K Entities augments the Flickr30K [14] imagesentence dataset, consisting of 31783 images with ﬁve sentences each, with annotations that link 244K mentions of distinct entities in sentences to 276K ground-truth bounding boxes.
+The phrase localization task was introduced in Section 3.1. To recap brieﬂy, given a query noun phrase from an image caption and a set of region proposals from the same image, we rank the proposals using the region-phrase similarity scores produced by one of our trained networks. Consistent with Plummer et al. [12], for each image we use 200 region proposals produced by the category-independent EdgeBox method [53]. A proposal is considered to be a correct match for the query phrase if it has an Intersection over Union (IoU) score of at least 0.5 with the ground-truth bounding box for that phrase. Accuracy is evaluated using Recall@K, deﬁned as the percentage of phrases for which the correct region is ranked among the top K.
+
+4.1 Training Set Construction
+In our experience, properly deﬁning positive/negative region-phrase pairs and sampling pairs and triplets of examples during training is crucial for achieving the best performance. Phrase localization is akin to object detection, in that region-phrase scores produced by the embedding should be sensitive not only to semantic correspondence, but also to localization quality, i.e., how much a given region proposal overlaps the ground truth box for a query phrase. By default, given a phrase from a description of a speciﬁc image, Flickr30K Entities annotations specify a unique ground truth region.2 Our conference paper [19], together with other related work like MCB [51], only used the ground truth boxes as positive regions during training. However, we have since realized that it is highly beneﬁcial to augment the ground truth positive region with other proposals that have sufﬁciently high overlap with it. Speciﬁcally, we consider proposals having IoU > 0.7 with the ground truth as positive examples for the corresponding phrase, while proposals with IoU < 0.3 are marked as negative background regions. As our experiments will demonstrate, positive region augmentation improves recall by 3∼4%. It helps to improve the model’s robustness since ground truth regions are not available at test time, and is consistent with the way object detection is typically evaluated (a detection does not need to perfectly overlap the ground truth box to be considered correct).
+Starting from our deﬁnition of positive and negative pairs, we sample mini-batches of triplets for the embedding network and pairs for the similarity network according to the procedure given in Algorithm 1.
+4.2 Baselines and Comparisons
+Our experiments systematically evaluate multiple components of our models, including network structure, sampling of the training set, and different components of the loss function for the embedding network. The full list of variants used in our comparisons is as follows.
+Network Architecture. We are interested in how our networks beneﬁt from being able to learn a nonlinear mapping in each branch. For this, we compare two variants:
+• Linear branch structure: only keeping the ﬁrst layers in each branch (i.e., the ones with parameters W1, V1, as shown in Figure 1) immediately followed by L2 normalization.
+• Nonlinear branch structure: branches consisting of two FC layers with ReLU, batch normalization and L2 normalization.
+Selecting Positive Pairs. We evaluate how positive example augmentation contributes to the performance of phrase localization. We compare the vanilla scheme without augmentation to our scheme described in Section 4.1:
+• Single positive: using the ground truth region for a phrase as the single positive example.
+2. Consistent with [12], for plural entities associated with multiple boxes, we form one big bounding box containing all the instances. We also exclude non-visual phrases, i.e., phrases that do not correspond to a bounding box.
+
+7
+Triplet sampling for the embedding network.
+1) Accumulate all pairs of ground truth regions with corresponding phrases from the dataset. Randomly shufﬂe these pairs into sets of 100.
+2) Positive region augmentation (optional): For each ground truth region-phrase pair, generate a positive pair (x, y) where x is a randomly chosen region having IoU ≥ 0.7 with the ground truth region for phrase y.
+3) For each positive pair (x, y) from the initial set of 100:
+a) Enumerate all triplets (x, y, y ) where y is a phrase from this mini-batch not in the same coreference chain as y (i.e., phrases y and y are not both associated with the same ground truth region). Evaluate the loss for all these triplets and keep at most K = 30 with highest nonnegative loss.
+b) Enumerate all triplets (y, x, x ) where x is a region from the same image with IoU < 0.3 with the ground truth. Keep at most K = 30 triplets with highest nonnegative loss.
+c) Neighborhood sampling (optional):
+i) For each unique target region x: make sure there are at least two triplets (x, y1, y1) and (x, y2, y2) where y1 and y2 are both positive matches for x. If needed, add a triplet by sampling y2 from the same coreference chain as y1.
+ii) For each unique target phrase y: make sure there are at least two triplets (y, x1, x1) and (y, x2, x2) where x1 and x2 are both positive matches for y. If needed, add a triplet by randomly sampling a positive region x2 from the same picture.
+Pair sampling for the similarity network.
+1) Accumulate all pairs of ground truth regions with corresponding phrases from the dataset. Randomly shufﬂe these pairs into sets of 100.
+2) Positive region augmentation (optional): For each ground truth region-phrase pair, generate all positive pairs (x, y) where x is a region having IoU ≥ 0.7 with the ground truth region for phrase y.
+3) For each positive pair (x, y) from the augmented set, get a corresponding negative pair (x , y) by randomly selecting a region proposal from the same image with IoU < 0.3 with the ground truth.
+
+Algorithm 1. Mini-batch construction for the phrase localization task.
+
+• Augmented positive: augmenting ground truth regions with other regions having IoU > 0.7 with it.
+Embedding Loss Functions. In principle, phrase localization is a single-directional task of retrieving image regions given a query phrase, so we want to know whether we can derive an additional beneﬁt by using a bi-directional loss function:
+• Single-directional: only using the phrase-to-region loss from Eq.(6). This is done by setting λ1 = 0, λ2 = 1, λ3 = 0, λ4 = 0.
+• Bi-directional: using the bi-directional loss from Eq.(6). This is done by setting λ1 = 1, λ2 = 4, λ3 = 0, λ4 = 0. These parameter values have been tuned on our validation set.
+Neighborhood Sampling and Constraints. Flickr30K Entities dataset includes 130K pairs of region-phrase correspondences, with 70K unique phrases and 80K unique regions. In general, one phrase can correspond to many regions and vice versa. We are interested in how multiple matches to the same region (resp. phrase) can help the task, as described in Section 3.2.3:
+• Neighborhood sampling: using the sampling strategy of Section 3.2.3 to augment standard triplet sampling.
+• Neighborhood constraints: using the full loss function of Eq.(6). This is done by setting λ3 = 0.1, λ4 = 0.1. This requires the use of neighborhood sampling.
+
+4.3 Implementation details
+Following Rohrbach et al. [52] and Plummer et al. [56], we use Fast R-CNN features [57] from the VGG network [58] ﬁne-tuned on the union of the PASCAL 2007 and 2012 trainval sets [59]. To be consistent with [56], we extract 4096D features from a single crop of an image region.
+For phrases, we use the Fisher Vector (FV) encoding [60] as suggested by Klein et al. [2]. We start from 300dimensional word2vec features [16] and apply ICA as in [2] to construct a codebook with 30 centers. The resulting FV representation has dimension 300 × 30 × 2 = 18000. For simplicity, we only use the Hybrid Gaussian-Laplacian Mixture Model (HGLMM) from [2] rather than the combined HGLMM+GMM model. To save memory and training time, we perform PCA on these 18000-dimensional vectors to reduce the dimension to 6000. A disadvantage of HGLMM is that it is a complex and nonlinear hand-crafted text feature. However, as we showed in the conference version of this work [61], we can obtain very similar results on top of basic tf-idf features. In this paper, our main focus is on the design and training of two-branch networks, so we omit the evaluation of different text features.
+Both the embedding and similarity networks use the same conﬁgurations for the two branches. The image branch has two FC layers with weight matrices W1 and W2 having sizes 4096 × 1024 and 1024 × 512. The text branch has two FC layers with weight matrices V1 and V2 having sizes
+
+8
+
+6000 × 1024 and 1024 × 512. Thus, the embedding network projects image and text features into a 512-dimensional latent space. For the similarity network, the 512-dimensional outputs of the two branches get combined by the elementwise product layer that doesn’t change the dimensionality, followed by three additional FC layers with parameters of size 512×512, 512×256 and 256×1. The similarity network outputs a scalar score trained with logistic regression as described in Section 3.3.
+All our experiments in Sections 4 and 5 are conducted in TensorFlow. We train our phrase localization networks using the Adam optimizer [62] with an initial learning rate of 0.001. We use a mini-batch of 100 image-phrase pairs. Each epoch thus needs around 4000 iterations. Both our similarity (with single and augmented positives) and embedding networks (no neighborhood terms or sampling) converge after 32000 iterations (around 8 epochs). For both similarity and embedding networks, it takes around 1-2 days to get convergence with a single Geforce GTX TITAN X card. Training the embedding network takes longer due to the addition of neighborhood constraints. Therefore, in order to save time, we ﬁrst train the network without adding neighborhood constraints for 8 epochs with neighborhood sampling, then add the neighborhood terms and resume the training for two additional epochs.
+4.4 Result Analysis
+At test time, we treat phrase localization as the task of retrieving regions matching a query phrase (assumed to be present in the image) from a set of region proposals. For the embedding network, the query phrase and each candidate region are passed through the respective branches to compute their embedded representation, and Euclidean distance (equivalently, cosine similarity) is used as the similarity score. For the similarity network, the score is predicted directly using the logistic formulation. In both cases, we rank regions in decreasing order of similarity to the query and report Recall@K, or the percentage of queries for which the correct match has rank of at most K. A region proposal is considered to be a correct match if it has IoU of at least 0.5 with the ground-truth bounding box for that phrase. We use the evaluation code provided by Plummer et al. [12].
+Table 1 shows the results of our embedding and similarity networks, in comparison to several state-of-the-art methods. Among them, CCA [12], GroundeR [52] and MCB [51], introduced in Section 2, are representative linear and deep models for this task. We also compare to the structured matching system of Wang et al. [61], which uses a singlelayer version of our embedding network from [19] combined with global optimization to ﬁnd a joint assignment of phrases to all image regions while satisfying certain relations derived from the sentence. As we can see from Table 1(a), CCA, which is trained only on positive regionphrase pairs, already establishes a strong baseline. MCB gives the best results among all previous methods.
+Table 1(b) gives the ablation study results for the embedding network. Using a nonlinearity within each branch improves performance, and using bi-directional instead of single-directional loss function doesn’t give too much difference, since phrase localization emphasizes more on the single direction (phrase-to-region). Therefore, given the limited
+
+space, we only list those combinations with bi-directional loss in Table 1(b). Adding positive region augmentation improves R@1 by almost 5%. Neighborhood sampling, that uses at least two positive regions for each query phrase in the mini-batch, gives a further increase of about 2% over standard sampling that only uses one positive region.
+Finally, adding neighborhood constraints gives a slight drop in R@1 but further minor improvements in R@5 and R@10. Interestingly, contrary to our original expectations [19], it is the composition of the mini-batches, not the imposition of a speciﬁc neighborhood-preserving loss penalty during training, that seems to be responsible for most of the improvements in performance. However, imagesentence retrieval experiments in Section 5 will demonstrate that neighborhood constraints have a more noticeable effect on the accuracy of retrieval within the same modality, i.e., sentence-to-sentence retrieval as opposed to imagesentence retrieval. For both neighborhood constraints and neighborhood sampling, as we found in experiments, the neighborhood of regions (namely the third term in Eq.(6)) plays a more important role than neighborhood of phrases (the fourth term in Eq.(6)) since it is easier to get multiple positive regions than have more than one positive phrases in this task.
+Table 1(c) reports the accuracy of the similarity network with and without nonlinearity in each branch, with and without positive region augmentation. Consistent with the embedding network results, the nonlinear models improve R@1 over their linear versions by about 2%, but positive region augmentation gives an even bigger improvement of about 5%. The highest R@1 achieved by the similarity network is 51.05, which is almost identical to the 50.69 or 51.03 achieved by our best embedding networks. We also checked the performance of the similarity network with a different number of FC layers after the element-wise product, though we do not list the complete numbers in Table 1 to avoid clutter. With a single FC layer, we get a signiﬁcantly lower R@1 of 36.61, and with two FC layers, we get 49.39, which is almost on par with three layers.
+Figure 2 shows examples of phrase localization results in three images with our best model (similarity networks with augmented positives) compared to the CCA model.
+4.5 Discussion
+Our embedding and similarity networks are comparable in terms of recall, but they have different advantages and disadvantages. The embedding network has a more complex and memory-intensive training procedure due to its use of triplet sampling. To be speciﬁc, on average, the similarity network has 2138 pairs in each mini-batch (split equally between positive and negative pairs), while the embedding network has 5378 triplets without neighborhood sampling and 10756 with neighborhood sampling. On the other hand, the similarity network has more model parameters due to the addition of three FC layers after the element-wise product layer. The embedding network is more ﬂexible than the similarity network because it learns an explicit “shared space” that is readily available for other tasks. The ranking loss used by the embedding network also gives us more freedom to ﬁne-tune the structure of the embedding space via neighborhood-preserving constraints.
+
+9
+
+Methods on Flickr30K Entities
+
+R@1 R@5 R@10
+
+(a) State of the art
+
+CCA baseline [12]
+
+StructMatch [61]
+
+GroundingPhrase [52]
+
+MCB Element-wise Product [51]
+
+MCB [51]
+
+linear
+
+nonlinear
+
+single positive
+
+augm. positive
+
+singledir.
+
+bi-dir.
+
+neighbor. sampling
+
+neighbor. constr.
+
+41.77 42.08 47.70 47.41 48.69
+R@1
+
+64.52 -
+R@5
+
+70.77 -
+R@10
+
+-
+
+-
+
+-
+
+-
+
+-
+
+39.60 64.30 71.00
+
+(b)
+
+-
+
+Embedding -
+
+Network
+
+-
+
+-
+
+-
+
+-
+
+-
+
+43.15 65.78 71.64
+
+-
+
+-
+
+-
+
+-
+
+44.53 67.46 73.12
+
+-
+
+-
+
+-
+
+-
+
+49.09 69.46 74.80
+
+-
+
+-
+
+-
+
+-
+
+51.03 70.26 75.25
+
+-
+
+-
+
+-
+
+50.69 70.42 75.51
+
+(c)
+
+-
+
+Similarity -
+
+-
+
+-
+
+-
+
+-
+
+-
+
+43.19 65.45 70.88
+
+-
+
+-
+
+-
+
+-
+
+-
+
+45.19 67.14 72.13
+
+Network
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+48.30 68.97 74.08
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+51.05 70.30 75.04
+
+TABLE 1 Phrase localization results on Flickr30K Entities. We use 200 EdgeBox proposals, for which the recall upper bound is R@200 = 84.58. See
+Section 4.2 for deﬁnitions of all the variants of embedding and similarity networks that we compare.
+
+5 IMAGE-SENTENCE RETRIEVAL
+This section evaluates our networks on the task of bidirectional image-sentence retrieval, which was introduced in Section 3.1. Given a query image (resp. sentence), the goal is to ﬁnd corresponding sentences (resp. images) from the dataset. In addition to the Flickr30K dataset, here we perform experiments on the larger MSCOCO dataset [13], consisting of 123287 images (the combination of released train2014 and val2014 from MSCOCO website) with ﬁve sentences each. MSCOCO does not include comprehensive region-phrase correspondence, so we can use it for imagesentence retrieval only.
+
+accurately. This is not a major issue for phrase localization, since in Section 4 we adopt the alternative strategy of sampling negative pairs (x , y) with the “negative” regions x constrained to have low overlap with x in the same image (Algorithm 1). It also doesn’t play as much of a role for the embedding network, since the triplet objective merely tries to make sure that the captions actually written for a given image are closer to it than other sentences, not to push down the similarity of the other sentences to the image to a ﬁxed low target value. Based on this reasoning, we expect the similarity network to perform poorly for imagesentence retrieval, and the subsequent experiments conﬁrm this expectation.
+
+5.1 Training Set Construction
+The mini-batch construction procedure for the imagesentence task is a simpliﬁed version of the one from Algorithm 1. For the embedding network, we start by randomly permuting the data into mini-batches consisting of 500 positive image-sentence pairs. Then for each positive image-sentence pair (x, y), we enumerate triplets (x, y, y ) where y is a sentence in the same mini-batch not associated with x, as well as triplets (y, x, x ) where x is an image in the mini-batch not associated with y. In both cases, we keep at most K = 10 triplets with highest nonnegative loss. For neighborhood sampling, we need to make sure that given a target image x, a mini-batch has at least two triplets (x, y1, y1) and (x, y2, y2) where y1 and y2 are both sentences associated with x. Because we typically cannot identify more than one image described by the same sentence, we cannot do the other direction of neighborhood sampling, corresponding to step 3.c.ii of Algorithm 1.
+For the similarity network, for each positive pair (x, y), we generate a negative pair (x, y ) by randomly sampling a sentence not associated with the image. Note, however, that we cannot guarantee that x and y are semantically incompatible with each other, since for any given image, our image-sentence datasets probably contain a number of sentences not associated with it that could still describe it
+
+5.2 Baselines and Comparisons
+Just as in Section 4, we demonstrate the impact of different components of our models by reporting results for the following variants.
+Linear vs. Nonlinear Branch Structure. The same way as in the phrase localization experiments, we want to see the difference made by having one vs. two fully connected layers within each branch.
+Embedding Loss Functions. Image-sentence retrieval is a bi-directional retrieval task, so we want to see whether bidirectional loss can give a bigger improvement over the single-directional loss than that on phrase localization task.
+• Single-directional: in Eq.(6), only using the single direction (from image to sentences) by setting λ1 = 1, λ2 = 0, λ3 = 0, λ4 = 0.
+• Bi-directional: in Eq.(6), set λ1 = 1, λ2 = 1.5, λ3 = 0, λ4 = 0. These parameter values are determined on the validation set.
+Neighborhood Sampling and Constraints. In both Flickr30K and MSCOCO datasets, each image is associated with ﬁve sentences. Therefore, we can try to enforce neighborhood structure on the sentence space. We cannot do it on the image space since in the Flickr30K and MSCOCO
+
+10
+
+Fig. 2. Example phrase localization results. For each image and reference sentence, phrases and best-scoring corresponding regions are shown in the same color. The ﬁrst row shows the output of the CCA method [12] and the second row shows the output of our best model (similarity network trained with augmented positive regions). In the ﬁrst example, our method ﬁnds a partially correct bounding box for the horse while CCA completely misses it; in the second (middle) example, our method gives a more accurate bounding box for the frisbee. In the third (right) example, our method gives marginally better boxes for the chainsaw and wooden sculpture.
+
+datasets we do not have direct supervisory information about multiple images that can be described by the same sentence. Thus, in Eq.(6), we always have λ3 = 0.
+• Neighborhood sampling: using the neighborhood sampling strategy (see Section 3.2.3) to replace standard triplet sampling.
+• Neighborhood constraints: using the full loss function as in Eq.(6). This is done by setting λ2 = 1.5, λ4 = 0.05. We always use neighborhood sampling in this case.
+5.3 Implementation Details
+To represent whole images, we follow the implementation details in [2], [12]. Given an image, we extract the 4096dimensional activations from the 19-layer ImageNet-trained VGG model [58]. Following standard procedure, the original 256 × 256 image is cropped in ten different ways into 224 × 224 images: the four corners, the center, and their x-axis mirror image. The mean intensity is then subtracted from each color channel, the resulting images are encoded by the network, and the network outputs are averaged. The output dimensions of the two FC layers on the image side are 2048 and 512.
+To represent sentences, we continue to rely on the same orderless HGLMM features as for phrase localization, PCAreduced to 6000 dimensions, with output dimensions of the two FC layers on the text side also set to 2048 and 512. However, while we could be reasonably assured that these features do not lose much information when representing short phrases, their suitability for longer sentences is less
+
+clear. Therefore, in this section we also evaluate a recurrent sentence representation learned by an LSTM [67]. We start with a one-hot encoding with vocabulary size of 11,263 (MSCOCO) and 8,569 (Flickr30K), which are the numbers of words in the respective training sets. This input gets projected into a word embedding layer of dimension 256, and the LSTM hidden space dimension is 512. The hidden space output is used as the input to the text branch of our embedding network. Accordingly, we change the ﬁrst FC layer of the text branch to accept 512-dimensional input. The output dimensions of the two FC layers are 1024 and 512. During training, the LSTM parameters are optimized jointly with the rest of the network parameters by backpropagating the embedding loss.
+For the subsequent experiments, we train our networks using Adam with starting learning rate of 0.0001 for HGLMM features and 0.0002 for LSTM features. We use a Dropout layer after ReLU with probability = 0.5 (note that in the phrase localization experiments of Section 4, we did not use Dropout, as we found that it did not make a difference).
+5.4 Result Analysis
+For evaluation of bi-directional image-sentence retrieval, we follow the same protocols as other recent works [2], [12]. Given the test set of 1000 images and 5000 corresponding sentences, we use our networks to score images given query sentences and vice versa, and report performance as Recall@K (K = 1, 5, 10), or the percentage of queries for which at least one correct ground truth match was ranked among the top K matches. For Flickr30K, we use the same random split as Plummer et al. [12]. For MSCOCO, like [1],
+
+11
+
+(a) State of the art
+(b) Embedding Network (c) Embedding Network(LSTM) (d) Similarity Network
+
+Methods on Flickr30K
+
+Deep CCA [26]
+
+mCNN(ensemble) [63]
+
+m-RNN-vgg [33]
+
+Mean vector [2]
+
+CCA (FV HGLMM) [2]
+
+CCA (FV GMM+HGLMM) [2]
+
+CCA (FV HGLMM) [12]
+
+Two-way Nets [18]
+
+linear
+
+nonlinear
+
+single dir.
+
+bi-dir.
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+neighbor. sampling -
+-
+
+neighbor. constr. -
+-
+
+Image-to-sentence
+R@1 R@5 R@10 27.9 56.9 68.2 33.6 64.1 74.9 35.4 63.8 73.7 24.8 52.5 64.3 34.4 61.0 72.3 35.0 62.0 73.8 36.5 62.2 73.3 49.8 67.5 -
+R@1 R@5 R@10
+38.1 68.9 79.4 40.1 66.9 75.9 40.5 71.9 80.8 40.5 70.7 80.9 41.6 69.5 79.3 43.2 71.6 79.8 37.5 64.7 75.0 16.6 38.8 51.0
+
+Sentence-to-image
+R@1 R@5 R@10 26.8 52.9 66.9 26.2 56.3 69.6 22.8 50.7 63.1 20.5 46.3 59.3 24.4 52.1 65.6 25.0 52.7 66.0 24.7 53.4 66.8 36.0 55.6 -
+R@1 R@5 R@10
+22.6 49.0 61.5 27.5 56.9 68.5 22.1 47.1 57.9 30.7 61.1 72.3 31.1 61.5 72.8 31.7 61.3 72.4 28.4 56.3 67.4 7.4 23.5 33.3
+
+TABLE 2 Bi-directional retrieval results. The numbers in (a) come from published papers, and the numbers in (b-d) are results of our embedding and similarity networks. Note that the Deep CCA results in [26] were obtained with AlexNet [64]. The results of our embedding network with AlexNet
+are still about 3% higher than those of [26] for image-to-sentence retrieval and 1% higher for sentence-to-image retrieval.
+
+(a) State of the art
+(b) Embedding Network (nonlinear, bi-directional)
+
+Methods on MSCOCO 1000
+
+Mean vector [2] CCA (FV HGLMM) [2] CCA (FV GMM+HGLMM) [2] DVSA [4] m-RNN-vgg [33] mCNN(ensemble) [63] LayerNorm [65] OrderEmbedding [66] Two-way Nets [18]
+
+neighbor. neighbor. sampling constr.
+
+-
+
+-
+
+-
+
+Image-to-sentence
+
+R@1 R@5 R@10
+
+33.2 61.8 75.1
+
+37.7 66.6 79.1
+
+39.4 67.9 80.9
+
+38.4 69.9 80.5
+
+41.0 73.0 83.5
+
+42.8 73.1 84.1
+
+48.5 80.6 89.8
+
+46.7 -
+
+88.9
+
+55.8 75.2 -
+
+R@1 R@5 R@10
+
+53.0 82.3 91.6 54.2 84.1 92.2 54.9 84.0 92.2
+
+(c) Embedding Network(LSTM)
+
+(d) Similarity Network
+
+-
+
+-
+
+54.0 84.0 91.2 30.9 61.1 76.2
+
+TABLE 3 Bi-directional retrieval results on the MSCOCO 1000-image test set.
+
+Sentence-to-image
+
+R@1 R@5 R@10
+
+24.2 56.4 72.4
+
+24.9 58.8 76.5
+
+25.1 59.8 76.6
+
+27.4 60.2 74.8
+
+29.0 42.2 77.0
+
+32.6 68.6 82.8
+
+38.9 74.3 86.3
+
+37.9 -
+
+85.9
+
+39.7 63.3 -
+
+R@1 R@5 R@10
+
+41.2 75.8 87.7 42.4 76.2 88.1 43.3 76.4 87.5 43.3 76.8 87.6 14.0 30.0 37.8
+
+[2], we randomly generate the splits that contain 113287 images with their corresponding sentences for training, 1000 images and their corresponding sentences for testing and the remaining images and their corresponding sentences for validation.
+Results on the Flickr30K and MSCOCO datasets are given in Tables 2 and 3, respectively. Parts (a) of the tables list the numbers reported by recent competing methods. The most relevant baseline for our embedding network is CCA (HGLMM) [2], [12], since it uses the same underlying feature representations for images and sentences. Parts (b) of the tables give results for our embedding networks, and the trends are largely similar to those of Table 1. Going from single-directional to bi-directional constraints improves the accuracy by a bigger amount for sentenceto-image retrieval. Neighborhood sampling is effective and can generally improve over conventional triplet sampling around in R@1 across the table, and adding neighborhood constraints does not show signiﬁcant further improvements. In Table 3(b), adding neighborhood constraints improves
+
+the R@1 in both directions but shows a small drop for R@10. However, we will show in Section 5.5 that adding neighborhood constraints can consistently improve withinview retrieval.
+Parts (c) of Tables 2 and 3 give the results for our full embedding network with LSTM sentence encoding, which turns out to be comparable to, or slightly worse than, the HGLMM feature. For completeness, Parts (d) give the results for the similarity network. While we argued in Section 5.1 that the similarity network is poorly suited for this task, it is remarkable just how low its numbers are, especially given its competitive accuracy on the phrase localization task.
+5.5 Sentence-to-sentence Retrieval
+Our experiments on the embedding network both for phrase localization and image-sentence retrieval have shown that neighborhood sampling can give considerable improvements even without adding neighborhood constraint terms
+
+12
+
+Methods on Flickr30K
+
+neighbor. sampling
+
+neighbor. constr.
+
+R@1
+
+R@5
+
+R@10
+
+-
+
+-
+
+60.5 81.4 87.7
+
+-
+
+60.5 81.5 87.6
+
+63.8 84.1 90.2
+
+Methods on MSCOCO
+
+neighbor. sampling
+
+neighbor. constr.
+
+R@1
+
+R@5
+
+R@10
+
+-
+
+-
+
+54.4 78.3 86.9
+
+-
+
+54.3 78.8 86.9
+
+55.5 79.6 87.8
+
+TABLE 4 Sentence-to-sentence retrieval on Flickr30K and MSCOCO datasets.
+
+to the triplet loss. Thus, it is still unclear how neighborhood constraints change the latent embedding space. Therefore, in this section, instead of only looking at cross-modal retrieval, we show how neighborhood constraints can improve performance for the within-view task of sentence-to-sentence retrieval: given a query sentence, retrieve other sentences that correspond to the same image. For the evaluation metric, we still use R@K. We also use the same training/val/testing splits as in the previous section. Results on Flickr30K and MSCOCO datasets are listed in Table 4. It can be seen that adding neighborhood constraints on top of neighborhood sampling provides a more convincing gain for within-view retrieval than for cross-view retrieval. This behavior can be useful for practical multi-media systems where both tasks are required at the same time.
+
+5.6 Combining Image-Sentence and Region-Phrase Models
+So far, we have evaluated our networks separately on region-phrase and image-sentence correspondence tasks. The next obvious question is whether the local and global similarity models can be brought together, for example, to improve performance on image-sentence retrieval. Intuitively, it would be nice to have an approach that can verify whether an image and a sentence match based not only on their global features, but on detailed correspondence between regions in the image and phrases in the sentence. Given the high accuracy achieved by our models on phrase localization in Section 4, one would expect that combining it with the image-sentence model of Section 5 would lead to signiﬁcant improvements. However, one of the most frustrating ﬁndings in our work to date is that making such a combination work is highly non-trivial. For completeness, and to point towards one of our most important future directions, we give in this section the results of the simple post-hoc weighted combination scheme from our related work [56]. Given an image x and a sentence y, we deﬁne the combined image-sentence and region-phrase distance as
+
+D(x, y) = (1 − α) d(x, y) + α drp(x, y) ,
+
+(8)
+
+where d(x, y) is the distance in the image-sentence latent space learned by the embedding network, and drp(x, y) is the average of the distances between all the phrases in the sentence and their best-matching regions in the image.
+
+For the image-sentence model, we use the best embedding network from Table 2. For the region-phrase model, we use the generated embedding distance matrix from Table 1. We set α = 0.3, which was experimentally found to give the best results.
+As can be seen from Table 5, the improvement of the combined model over the image-sentence one is very small. We have analyzed some of the reasons for this somewhat surprising and frustrating outcome in our related journal paper [56], where we used simple CCA embeddings. Namely, the global image-sentence model already works very well for image-sentence retrieval, in that it usually succeeds in retrieving sentences that roughly ﬁt the image. In order to provide an improvement, the region-phrase model would have to make ﬁne distinctions of which it is currently incapable, e.g., between closely related or easily confused objects, between ﬁne-grained attributes of people, or cardinalities of people and objects. Furthermore, due to the way our region-phrase model is trained, its scores are meant to be useful for ranking regions within the same image based on the correspondence to a given phrase that is assumed to be present. However, we found them to be much less consistent when ranking a phrase across different images, or ranking different phrases in the same image. In other words, given a region-phrase score output by our embedding network, we cannot use it as evidence of presence or absence of a given phrase in an image, in the same way that one might want to use the score of an object detector. Extending our training formulation to a more open-ended phrase detection scenario is an important subject for future work, as is joint training of image-sentence and region-phrase embeddings in a single network (to date, our attempts at joint training have not led to good results).
+6 CONCLUSION AND FUTURE WORK
+This paper has studied state-of-the-art two-branch network architectures for region-to-phrase and image-to-sentence matching. To our knowledge, our results on Flickr30K and MSCOCO datasets are the best to date on both tasks. Our ﬁrst architecture, the embedding network, works by explicitly learning a non-linear mapping from input image and text features into a joint latent space in which corresponding image and text features have high similarity. This network works well for both image-sentence and region-phrase tasks, though its objective consists of multiple terms and relies on somewhat costly and intricate triplet sampling. We investigated triplet sampling within mini-batches in detail and showed that the way it is done can have a signiﬁcant impact on performance, even without changing the objective function. Our second architecture, the similarity network, tries to directly predict whether an input image and text feature are similar or dissimilar. Our experiments showed that this network can serve as an attractive alternative to the embedding network for region-phrase matching, but fails miserably for image-sentence retrieval, revealing an interesting difference between the two tasks. Finally, our preliminary unsuccessful experiments on combining imagesentence and region-phrase models indicate an important direction for future research.
+
+13
+
+Methods on Flickr30K
+Image-sentence model Weighted distance
+
+Image-to-sentence R@1 R@5 R@10 43.2 71.6 79.8 43.8 72.1 80.4
+
+Sentence-to-image R@1 R@5 R@10 31.7 61.3 72.4 33.5 62.4 73.9
+
+TABLE 5 Results on Flickr30K image-sentence retrieval with incorporating region-phrase correspondences (see text).
+
+ACKNOWLEDGMENTS
+This material is based upon work supported by the Na-
+tional Science Foundation under Grants CIF-1302438 and
+IIS-1563727, Xerox UAC, and the Sloan Foundation. We
+would like to thank Bryan Plummer for providing features
+for region-phrase experiments, and Kevin Shih for thought-
+ful discussions on the similarity network and help with
+building the region-phrase experimental environment.
+REFERENCES
+[1] A. Karpathy, A. Joulin, and F. F. F. Li, “Deep fragment embeddings for bidirectional image sentence mapping,” in NIPS, 2014.
+[2] B. Klein, G. Lev, G. Sadeh, and L. Wolf, “Fisher vectors derived from hybrid gaussian-laplacian mixture models for image annotation,” CVPR, 2015.
+[3] Y. Gong, L. Wang, M. Hodosh, J. Hockenmaier, and S. Lazebnik, “Improving image-sentence embeddings using large weakly annotated photo collections,” in ECCV, 2014.
+[4] A. Karpathy and L. Fei-Fei, “Deep visual-semantic alignments for generating image descriptions,” in CVPR, 2015.
+[5] J. Johnson, A. Karpathy, and L. Fei-Fei, “Densecap: Fully convolutional localization networks for dense captioning,” CVPR, 2016.
+[6] O. Vinyals, A. Toshev, S. Bengio, and D. Erhan, “Show and tell: A neural image caption generator,” in CVPR, 2015.
+[7] S. Antol, A. Agrawal, J. Lu, M. Mitchell, D. Batra, C. Lawrence Zitnick, and D. Parikh, “Vqa: Visual question answering,” in ICCV, 2015.
+[8] L. Yu, E. Park, A. C. Berg, and T. L. Berg, “Visual madlibs: Fill in the blank image generation and question answering,” ICCV, 2015.
+[9] A. Jabri, A. Joulin, and L. van der Maaten, “Revisiting visual question answering baselines,” in ECCV, 2016.
+[10] S. Kazemzadeh, V. Ordonez, M. Matten, and T. L. Berg, “Referitgame: Referring to objects in photographs of natural scenes.” in EMNLP, 2014.
+[11] L. Yu, P. Poirson, S. Yang, A. C. Berg, and T. L. Berg, “Modeling context in referring expressions,” in ECCV, 2016.
+[12] B. A. Plummer, L. Wang, C. M. Cervantes, J. C. Caicedo, J. Hockenmaier, and S. Lazebnik, “Flickr30k entities: Collecting region-tophrase correspondences for richer image-to-sentence models,” in ICCV, 2015.
+[13] X. Chen, H. Fang, T.-Y. Lin, R. Vedantam, S. Gupta, P. Dolla´r, and C. L. Zitnick, “Microsoft coco captions: Data collection and evaluation server,” arXiv preprint arXiv:1504.00325, 2015.
+[14] P. Young, A. Lai, M. Hodosh, and J. Hockenmaier, “From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions,” Transactions of the Association for Computational Linguistics, vol. 2, pp. 67–78, 2014.
+[15] R. Krishna, Y. Zhu, O. Groth, J. Johnson, K. Hata, J. Kravitz, S. Chen, Y. Kalantidis, L.-J. Li, D. A. Shamma, M. Bernstein, and L. Fei-Fei, “Visual genome: Connecting language and vision using crowdsourced dense image annotations,” 2016. [Online]. Available: https://arxiv.org/abs/1602.07332
+[16] T. Mikolov, I. Sutskever, K. Chen, G. S. Corrado, and J. Dean, “Distributed representations of words and phrases and their compositionality,” in NIPS, 2013.
+[17] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Dolla´r, and C. L. Zitnick, “Microsoft coco: Common objects in context,” in ECCV, 2014.
+[18] A. Eisenschtat and L. Wolf, “Linking image and text with 2-way nets,” CVPR, 2017.
+[19] L. Wang, Y. Li, and S. Lazebnik, “Learning deep structurepreserving image-text embeddings,” CVPR, 2016.
+[20] L. Yu, H. Tan, M. Bansal, and T. L. Berg, “A joint speaker-listenerreinforcer model for referring expressions,” CVPR, 2017.
+
+[21] D. R. Hardoon, S. Szedmak, and J. Shawe-Taylor, “Canonical correlation analysis: An overview with application to learning methods,” Neural computation, vol. 16, no. 12, pp. 2639–2664, 2004.
+[22] H. Hotelling, “Relations between two sets of variables,” Biometrika, vol. 28, p. 312377, 1936.
+[23] Y. Gong, Q. Ke, M. Isard, and S. Lazebnik, “A multi-view embedding space for modeling internet images, tags, and their semantics,” IJCV, 2014.
+[24] M. Hodosh, P. Young, and J. Hockenmaier, “Framing image description as a ranking task: Data, models and evaluation metrics,” Journal of Artiﬁcial Intelligence Research, 2013.
+[25] G. Andrew, R. Arora, J. Bilmes, and K. Livescu, “Deep canonical correlation analysis,” in ICML, 2013.
+[26] F. Yan and K. Mikolajczyk, “Deep correlation for matching images and text,” in CVPR, 2015.
+[27] Z. Ma, Y. Lu, and D. Foster, “Finding linear structure in large datasets with scalable canonical correlation analysis,” ICML, 2015.
+[28] J. Ngiam, A. Khosla, M. Kim, J. Nam, H. Lee, and A. Y. Ng, “Multimodal deep learning,” in ICML, 2011.
+[29] N. Srivastava and R. R. Salakhutdinov, “Multimodal learning with deep boltzmann machines,” in NIPS, 2012.
+[30] J. Donahue, L. A. Hendricks, S. Guadarrama, M. Rohrbach, S. Venugopalan, K. Saenko, and T. Darrell, “Long-term recurrent convolutional networks for visual recognition and description,” arXiv:1411.4389, 2014.
+[31] R. Kiros, R. Salakhutdinov, and R. S. Zemel, “Multimodal neural language models.” in ICML, 2014.
+[32] R. Kiros, R. Salakhutdinov, and R. Zemel, “Unifying visualsemantic embeddings with multimodal neural language models,” in arXiv preprint arXiv:1411.2539, 2014.
+[33] J. Mao, W. Xu, Y. Yang, J. Wang, and A. Yuille, “Deep captioning with multimodal recurrent neural networks (m-rnn),” ICLR, 2015.
+[34] S. Venugopalan, H. Xu, J. Donahue, M. Rohrbach, R. Mooney, and K. Saenko, “Translating videos to natural language using deep recurrent neural networks,” arXiv:1412.4729, 2014.
+[35] J. Weston, S. Bengio, and N. Usunier, “Wsabie: Scaling up to large vocabulary image annotation,” in IJCAI, 2011.
+[36] A. Frome, G. S. Corrado, J. Shlens, S. Bengio, J. Dean, T. Mikolov et al., “Devise: A deep visual-semantic embedding model,” in NIPS, 2013.
+[37] R. Socher, A. Karpathy, Q. V. Le, C. D. Manning, and A. Y. Ng, “Grounded compositional semantics for ﬁnding and describing images with sentences,” Transactions of the Association for Computational Linguistics, vol. 2, pp. 207–218, 2014.
+[38] J. Hu, J. Lu, and Y.-P. Tan, “Discriminative deep metric learning for face veriﬁcation in the wild,” in CVPR, 2014.
+[39] T. Mensink, J. Verbeek, F. Perronnin, and G. Csurka, “Metric learning for large scale image classiﬁcation: Generalizing to new classes at near-zero cost,” in ECCV, 2012.
+[40] B. Shaw, B. Huang, and T. Jebara, “Learning a distance metric from a network,” in NIPS, 2011.
+[41] B. Shaw and T. Jebara, “Structure preserving embedding,” in ICML, 2009.
+[42] K. Q. Weinberger, J. Blitzer, and L. K. Saul, “Distance metric learning for large margin nearest neighbor classiﬁcation,” in NIPS, 2005.
+[43] J. Zˇ bontar and Y. LeCun, “Computing the stereo matching cost with a convolutional neural network,” arXiv:1409.4326, 2014.
+[44] J. Bromley, J. W. Bentz, L. Bottou, I. Guyon, Y. LeCun, C. Moore, E. Sa¨ckinger, and R. Shah, “Signature veriﬁcation using a siamese time delay neural network,” International Journal of Pattern Recognition and Artiﬁcial Intelligence, vol. 7, no. 04, pp. 669–688, 1993.
+[45] S. Chopra, R. Hadsell, and Y. LeCun, “Learning a similarity metric discriminatively, with application to face veriﬁcation,” in CVPR, 2005.
+[46] X. Han, T. Leung, Y. Jia, R. Sukthankar, and A. C. Berg, “Matchnet: Unifying feature and metric learning for patch-based matching,” in CVPR, 2015.
+
+14
+[47] E. Hoffer and N. Ailon, “Deep metric learning using triplet network,” ICLR, 2015.
+[48] F. Schroff, D. Kalenichenko, and J. Philbin, “Facenet: A uniﬁed embedding for face recognition and clustering,” CVPR, 2015.
+[49] J. Wang, Y. Song, T. Leung, C. Rosenberg, J. Wang, J. Philbin, B. Chen, and Y. Wu, “Learning ﬁne-grained image similarity with deep ranking,” in CVPR, 2014.
+[50] J. Ba, K. Swersky, S. Fidler, and R. Salakhutdinov, “Predicting deep zero-shot convolutional neural networks using textual descriptions,” ICCV, 2015.
+[51] A. Fukui, D. H. Park, D. Yang, A. Rohrbach, T. Darrell, and M. Rohrbach, “Multimodal compact bilinear pooling for visual question answering and visual grounding,” arXiv preprint arXiv:1606.01847, 2016.
+[52] A. Rohrbach, M. Rohrbach, R. Hu, T. Darrell, and B. Schiele, “Grounding of textual phrases in images by reconstruction,” ECCV, 2016.
+[53] C. L. Zitnick and P. Dolla´r, “Edge boxes: Locating object proposals from edges,” in ECCV, 2014.
+[54] S. Ioffe and C. Szegedy, “Batch normalization: Accelerating deep network training by reducing internal covariate shift,” ICML, 2015.
+[55] T. Joachims, T. Finley, and C.-N. J. Yu, “Cutting-plane training of structural svms,” Machine Learning, vol. 77, no. 1, pp. 27–59, 2009.
+[56] B. Plummer, L. Wang, C. Cervantes, J. Caicedo, J. Hockenmaier, and S. Lazebnik, “Flickr30k entities: Collecting region-to-phrase correspondences for richer image-to-sentence models,” IJCV, 2016.
+[57] R. Girshick, “Fast r-cnn,” in ICCV, 2015. [58] K. Simonyan and A. Zisserman, “Very deep convolutional net-
+works for large-scale image recognition,” arXiv:1409.1556, 2014. [59] M. Everingham, L. Van Gool, C. Williams, J. Winn, and A. Zisser-
+man, “The pascal visual object classes challenge 2012,” 2011. [60] F. Perronnin, J. Sanchez, and T. Mensink, “Improving the Fisher
+kernel for large-scale image classiﬁcation,” in ECCV, 2010. [61] M. Wang, M. Azab, N. Kojima, R. Mihalcea, and J. Deng, “Struc-
+tured matching for phrase localization,” in ECCV, 2016. [62] D. Kingma and J. Ba, “Adam: A method for stochastic optimiza-
+tion,” arXiv preprint arXiv:1412.6980, 2014. [63] L. Ma, Z. Lu, L. Shang, and H. Li, “Multimodal convolutional
+neural networks for matching image and sentence,” ICCV, 2015. [64] A. Krizhevsky, I. Sutskever, and G. E. Hinton, “ImageNet classiﬁ-
+cation with deep convolutional neural networks,” in NIPS, 2012. [65] J. L. Ba, J. R. Kiros, and G. E. Hinton, “Layer normalization,” arXiv
+preprint arXiv:1607.06450, 2016. [66] I. Vendrov, R. Kiros, S. Fidler, and R. Urtasun, “Order-embeddings
+of images and language,” ICLR, 2016. [67] S. Hochreiter and J. Schmidhuber, “Long short-term memory,”
+Neural computation, vol. 9, no. 8, pp. 1735–1780, 1997.
+

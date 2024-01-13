@@ -1,0 +1,1578 @@
+1
+
+Semi-Supervised and Unsupervised Deep Visual Learning: A Survey
+
+Yanbei Chen, Massimiliano Mancini, Xiatian Zhu, and Zeynep Akata
+
+arXiv:2208.11296v1 [cs.CV] 24 Aug 2022
+
+Abstract—State-of-the-art deep learning models are often trained with a large amount of costly labeled training data. However, requiring exhaustive manual annotations may degrade the model’s generalizability in the limited-label regime. Semi-supervised learning and unsupervised learning offer promising paradigms to learn from an abundance of unlabeled visual data. Recent progress in these paradigms has indicated the strong beneﬁts of leveraging unlabeled data to improve model generalization and provide better model initialization. In this survey, we review the recent advanced deep learning algorithms on semi-supervised learning (SSL) and unsupervised learning (UL) for visual recognition from a uniﬁed perspective. To offer a holistic understanding of the state-of-the-art in these areas, we propose a uniﬁed taxonomy. We categorize existing representative SSL and UL with comprehensive and insightful analysis to highlight their design rationales in different learning scenarios and applications in different computer vision tasks. Lastly, we discuss the emerging trends and open challenges in SSL and UL to shed light on future critical research directions.
+Index Terms—Semi-Supervised, Unsupervised, Self-Supervised, Visual Representation Learning, Survey
+!
+1 INTRODUCTION
+
+O VER the last decade, deep learning algorithms and architectures [1], [2] have been pushing the state of the art in a wide variety of computer vision tasks, ranging from object recognition [3], retrieval [4], detection [5], to segmentation [6]. To achieve human-level performance, deep learning models are typically built by supervised training upon a tremendous amount of labeled training data.However, collecting large-scale labeled training sets manually is not only expensive and time-consuming, but may also be legally prohibited due to privacy, security, and ethics restrictions. Moreover, supervised deep learning models tend to memorize the labeled data and incorporate the annotator’s bias, which weakens their generalization to new scenarios with unseen data distributions in practice.
+Cheaper imaging technologies and more convenient access to web data, makes obtaining large unlabeled visual data no longer challenging. Learning from unlabeled data thus becomes a natural and promising way to scale models towards practical scenarios where it is infeasible to collect a large labeled training set that covers all types of visual variations in illumination, viewpoint, resolution, occlusion, and background clutter induced by different scenes, camera positions, times of the day, and weather conditions.Semi-supervised learning [7], [8] and unsupervised learning [9], [10], [11], [12] stand out as two most representative paradigms for leveraging unlabeled data. Built upon different assumptions, these paradigms are often developed independently, whilst sharing the same aim to learn more powerful representations and models using unlabeled data.
+• This work was done when Y.Chen was with the University of Tu¨ bingen. E-mail: yanbeic@gmail.com
+• M. Mancini is with the University of Tu¨ bingen. E-mail: massimiliano.mancini@uni-tuebingen.de
+• X. Zhu is with the University of Surrey. E-mail: xiatian.zhu@surrey.ac.uk • Z. Akata is with the University of Tu¨ bingen, MPI for Informatics and
+MPI for Intelligent Systems. E-mail: zeynep.akata@uni-tuebingen.de
+
+Deep Visual Learning from Unlabeled Data
+
+Limited label supervision
+
+closed-set SSL
+
+open-set SSL
+
+No label supervision UL
+
+cat dog
+
+cat dog
+
+same label space & same domain
+
+different label space & same domain
+
+(a) Semi-Supervised Learning
+
+unknown label space & unknown domain
+(b) Unsupervised Learning
+
+Legend: labeled data unlabeled data unlabeled data in an unknown label space
+
+Fig. 1: An overview of semi-supervised and unsupervised learning paradigms – both aim to learn from unlabeled data.
+
+Figure 1 summarizes the two paradigms covered in this survey, which both utilize unlabeled data for visual representation learning. According to whether label annotations are given for a small portion or none of the training data, we categorize the paradigms as semi-supervised learning, and unsupervised learning as deﬁned explicitly in the following.
+(a) Semi-Supervised Learning (SSL) aims to jointly learn from sparsely labeled data and a large amount of auxiliary unlabeled data often drawn from the same underlying data distribution as the labeled data. In standard closed-set SSL [8], [13], the labeled and unlabeled data belong to the same set of classes from the same domain. In open-set SSL [14], [15], they may not lie in the same label space, i.e., the unlabeled data may contain unknown and/or mislabeled classes.
+(b) Unsupervised Learning (UL) aims to learn from only unlabeled data without utilizing any task-relevant label supervision. Once trained, the model can be ﬁne-tuned using labeled data to achieve better model generalization in a downstream task [16].
+
+2
+
+Following the above deﬁnitions, let the sets of labeled data and unlabeled data be denoted as Dl and Du. The overall uniﬁed learning objective for SSL and UL is:
+
+min
+θ
+
+λl
+
+(x,y)∈DL
+
+Lsup(x,
+
+y,
+
+θ)
+
++
+
+λu
+
+x∈DU
+
+Lunsup(x,
+
+θ),
+
+(1)
+
+where θ refers to the model parameters of a deep neural network (DNN); x is an input image and y is the corresponding label; Lsup and Lunsup are the supervised and unsupervised loss terms; λl and λu are balancing hyperparameters. In
+SSL, both loss terms are jointly optimized. In UL, only the
+
+unsupervised loss term is used for unsupervised model pre-
+
+training (i.e., λl = 0). Although SSL and UL share the same rationale of learning with an unsupervised objective, they
+
+differ in the learning setup, leading to different unique chal-
+
+lenges. Speciﬁcally, SSL assumes the availability of limited
+
+labeled data, and its core challenge is to expand the labeled
+
+set with abundant unlabeled data. UL assumes no labeled
+
+data for the main learning task and its key challenge is to
+
+learn task-generic representations from unlabeled data.
+
+We focus on providing a timely and comprehensive
+
+review of the advances in leveraging unlabeled data to
+
+improve model generalization, covering the representative
+
+state-of-the-art methods in SSL and UL, their application
+
+domains, to the emerging trends in self-supervised learn-
+
+ing. Importantly, we propose a uniﬁed taxonomy of the
+
+advanced deep learning methods to offer researchers a sys-
+
+tematic overview that helps to understand the current state
+
+of the art and identify open challenges for future research.
+
+Comparison with previous surveys. Our survey is related
+
+to other surveys on semi-supervised learning [8], [13], [17],
+
+self-supervised learning [18], [19], or both topics [20]. While
+
+these surveys mostly focus on a single particular learning
+
+setup [8], [13], [17], [18], non-deep learning methods [8],
+
+[13], or lacking a comprehensive taxonomy on methods and
+
+discussion on applications [20], our work covers a wider
+
+review of representative SSL and UL algorithms involving
+
+unlabeled visual data. Importantly, we categorize the state-
+
+of-the-art SSL and UL algorithms with novel taxonomies
+
+and draw connections among different methods. Beyond
+
+intrinsic challenges with each learning paradigm, we distill
+
+their underlying connections from the problem and algo-
+
+rithmic perspectives, discuss unique insights into different
+
+existing techniques, and their practical applicability.
+
+Survey organization and contributions. Our contributions
+
+are three fold. First, to our knowledge, this is the ﬁrst deep
+
+learning survey of its kind to provide a comprehensive
+
+review of three prevalent machine learning paradigms in
+
+exploiting unlabeled data for visual recognition, including
+
+semi-supervised learning (SSL, §2), unsupervised learning
+
+(UL, §3), and a further discussion on SSL and UL (§4).
+
+Second, we provide a uniﬁed, insightful taxonomy and anal-
+
+ysis of the existing methods in both the learning setup and
+
+model formulation to uncover their underlying algorithmic
+
+connections. Finally, we outlook the emerging trends and
+
+future research directions in §5 to shed light on those under-
+
+explored and potentially critical open avenues.
+
+2 SEMI-SUPERVISED LEARNING (SSL)
+Semi-Supervised Learning (SSL) [8], [13] aims at exploiting large unlabeled data together with sparsely labeled data.
+
+labeled sample
+
+xl <latexit sha1_base64="hgDgYhHEJVquJzazbbQDPq+ktTA=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120i7dbMLuRiyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEsG1cd1vZ2V1bX1js7BV3N7Z3dsvHRw2dZwqhg0Wi1i1A6pRcIkNw43AdqKQRoHAVjC6mfqtR1Sax/LBjBP0IzqQPOSMGivdP/VEr1R2K+4MZJl4OSlDjnqv9NXtxyyNUBomqNYdz02Mn1FlOBM4KXZTjQllIzrAjqWSRqj9bHbqhJxapU/CWNmShszU3xMZjbQeR4HtjKgZ6kVvKv7ndVITXvkZl0lqULL5ojAVxMRk+jfpc4XMiLEllClubyVsSBVlxqZTtCF4iy8vk2a14p1XqncX5dp1HkcBjuEEzsCDS6jBLdShAQwG8Ayv8OYI58V5dz7mrStOPnMEf+B8/gBmao3f</latexit>
+
+unlabeled sample
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+supervised loss
+
+p(y|xl; ✓)
+<latexit sha1_base64="impk11gZ/nzoW4bjrMLykx5PbD0=">AAAB+HicbVBNS8NAEN3Ur1o/GvXoJViEeilJFRS8FL14rGA/oA1hs920SzebsDsRY+wv8eJBEa/+FG/+G7dtDtr6YODx3gwz8/yYMwW2/W0UVlbX1jeKm6Wt7Z3dsrm331ZRIgltkYhHsutjRTkTtAUMOO3GkuLQ57Tjj6+nfueeSsUicQdpTN0QDwULGMGgJc8sx9X06cHjl30YUcAnnlmxa/YM1jJxclJBOZqe+dUfRCQJqQDCsVI9x47BzbAERjidlPqJojEmYzykPU0FDqlys9nhE+tYKwMriKQuAdZM/T2R4VCpNPR1Z4hhpBa9qfif10sguHAzJuIEqCDzRUHCLYisaQrWgElKgKeaYCKZvtUiIywxAZ1VSYfgLL68TNr1mnNaq9+eVRpXeRxFdIiOUBU56Bw10A1qohYiKEHP6BW9GY/Gi/FufMxbC0Y+c4D+wPj8AWd3kus=</latexit>
+
+Lsup <latexit sha1_base64="q3ICsgq0CN99VyghbiiWSmcDDF8=">AAACAXicbVBNS8NAEN3Ur1q/ol4EL8EieCpJFfRY9OLBQwX7AU0Im+22XbrZhN2JWEK8+Fe8eFDEq//Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QBUpXEWeabVbtmT2EtEqcgVVSg6Ztfbj8iSUgFEI6V6jl2DF6KJTDCaVZxE0VjTMZ4SHuaChxS5aXTDzLrWCt9axBJXQKsqfp7IsWhUpMw0J35vWrey8X/vF4CgwsvZSJOgAoyWzRIuAWRlcdh9ZmkBPhEE0wk07daZIQlJqBDq+gQnPmXF0m7XnNOa/Xbs2rjsoijjA7RETpBDjpHDXSNmqiFCHpEz+gVvRlPxovxbnzMWktGMbOP/sD4/AH7ypfh</latexit>
+
+p(y|xu; ✓)
+<latexit sha1_base64="vaF2BancqNKJtIYsQ2C1/GH+3Nw=">AAAB+HicbVDLSsNAFJ3UV62PRl26CRahbkpSBQU3RTcuK9gHtCFMppN26OTBzB0xxn6JGxeKuPVT3Pk3TtsstPXAhcM593LvPX7CmQTb/jYKK6tr6xvFzdLW9s5u2dzbb8tYCUJbJOax6PpYUs4i2gIGnHYTQXHoc9rxx9dTv3NPhWRxdAdpQt0QDyMWMIJBS55ZTqrp04OnLvswooBPPLNi1+wZrGXi5KSCcjQ986s/iIkKaQSEYyl7jp2Am2EBjHA6KfWVpAkmYzykPU0jHFLpZrPDJ9axVgZWEAtdEVgz9fdEhkMp09DXnSGGkVz0puJ/Xk9BcOFmLEoU0IjMFwWKWxBb0xSsAROUAE81wUQwfatFRlhgAjqrkg7BWXx5mbTrNee0Vr89qzSu8jiK6BAdoSpy0DlqoBvURC1EkELP6BW9GY/Gi/FufMxbC0Y+c4D+wPj8AXVjkvQ=</latexit>
+
+Lunsup <latexit sha1_base64="JL9zGflPs0aTRBpXxc5BzywF5NM=">AAACA3icbVBNS8NAEN3Ur1q/ot70EiyCp5JUQY9FLx48VLAf0ISw2W7bpZtN2J2IJQS8+Fe8eFDEq3/Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QB0kSoJM4y36zaNXsKa5E4BamiAk3f/HL7EUlCKoBwrFTPsWPwUiyBEU6zipsoGmMyxkPa01TgkCovnf6QWcda6VuDSOoSYE3V3xMpDpWahIHuzC9W814u/uf1EhhceCkTcQJUkNmiQcItiKw8EKvPJCXAJ5pgIpm+1SIjLDEBHVtFh+DMv7xI2vWac1qr355VG5dFHGV0iI7QCXLQOWqga9RELUTQI3pGr+jNeDJejHfjY9ZaMoqZffQHxucPsxyY2A==</latexit>
+
+unsupervised loss
+
+Fig. 2: Semi-supervised learning (SSL) aims to learn jointly from a small set of labeled and a large set of unlabeled data.
+
+SSL is explored in various application domains, such as image search [21], medical data analysis [22], web-page classiﬁcation [23], document retrieval [24], genetics and genomics [25]. More recently, SSL has been used for learning generic visual representations to facilitate many computer vision tasks such as image classiﬁcation [26], [27], image retrieval [28], object detection [29], [30], semantic segmentation [31], [32], [33], and pose estimation [34], [35], [36]. While our review mainly covers generic semi-supervised learners for image classiﬁcation [26], [27], [37], [38], the ideas behind thembe generalized to solve other vision recognition tasks.
+We deﬁne the SSL problem setup and discuss its assumptions in §2.1. We provide a taxonomy and analysis of the existing semi-supervised deep learning methods in §2.2.
+
+2.1 The Problem Setting of SSL
+
+Problem Deﬁnition. In SSL, we often have access to a
+
+limited a large
+
+amount amount
+
+of labeled samples Dl = {xi,l, of unlabeled samples Du =
+
+yi{}xNii=,lu1}aNi=nu1d.
+
+Each labeled sample xi,l belongs to one of K class labels
+
+Y = {yk}Kk=1. For training, the SSL loss function L for a
+
+deep neural network (DNN) θ can generally be expressed as
+
+Eq. (1), i.e., L = λlLsup + λuLunsup. In many SSL methods,
+
+the hyperparameters λu in Eq. (1) is often a ramp-up weight-
+
+ing function (i.e., λ = w(t) and t is training iteration), which
+
+gradually increases the importance of the unsupervised loss
+
+term during training [14], [37], [39], [40], [41]. At test time, the model is deployed to recognize the K known classes.
+
+See Figure 2 for an illustration of SSL.
+
+Evaluation Protocol. To test whether an SSL model utilizes the unlabeled data effectively, two evaluation criteria are
+
+commonly adopted. First, the model needs to outperform its supervised baseline that learns from merely the labeled data. Second, when increasing the proportion of unlabeled
+
+samples in the training set, the improved margins upon the supervised baseline are expected to increase accordingly. Overall, these improved margins indicate the effectiveness
+
+and robustness of an SSL method.
+
+Assumptions. The main assumptions for SSL include the smoothness assumption [42] and manifold assumption [8],
+
+[42] – the latter is also known as cluster assumption [43], structure assumption [44], and low-density separation assumption [45]. Speciﬁcally, the smoothness assumption con-
+
+siders that the nearby data points are likely to share the same class label. The manifold assumption considers data points lying within the same structure (i.e., the same cluster
+
+or manifold) should share the same class label. In other words, the former assumption is imposed locally for nearby data points, while the latter is imposed globally based on
+
+3
+
+the underlying data structure formed by clusters or graphs.
+
+2.2 Taxonomy on SSL Algorithms
+Existing SSL methods generally assume that the unlabeled data is closed-set and task-speciﬁc, i.e., all unlabeled training samples belong to a pre-deﬁned set of classes. The idea shared by most existing works is to assign each unlabeled sample with a class label based on a certain underlying data structure, e.g., manifold structure [42], [44], and graph structure [73]. We divide the most representative semisupervised deep learning methods into ﬁve categories: consistency regularization, self-training, graph-based regularization, deep generative models, and self-supervised learning (Table 1), and provide their general model formulations in §2.2.1, §2.2.2, §2.2.3, §2.2.4 and §2.2.5.
+
+2.2.1 Consistency Regularization
+
+Consistency regularization includes a number of successful
+
+and prevalent methods [26], [27], [37], [39], [46], [49], [50],
+
+[51], [74]. The basic rationale is to enforce consistent model
+
+outputs under variations in the input space and (or) model
+
+space. The variations are often implemented by adding
+
+noise, perturbations or forming variants of the same input
+
+or model. Formally, the objective in case of input variation
+
+is:
+
+min
+
+d(p(y|x; θ), pˆ(y|xˆ; θ)),
+
+(2)
+
+θ x∈D
+
+and in case of model variation is:
+
+min
+
+d(p(y|x; θ), pˆ(y|x; θˆ)).
+
+(3)
+
+θ x∈D
+
+In Eq. (2), xˆ = qx(x; ) is a variant of the original input x, which is derived through a data transformation operation qx(·, ) with being the noise added via data augmentation and stochastic perturbation. Similarly, in Eq. (3), θˆ = fθ(θ; η) is a variant of the model θ derived via a transformation function fθ(·; η) with η being the randomness added via stochastic perturbation on model weights and model ensembling
+strategies. In both equations, the consistency is measured as the discrepancy d(·, ·) between two network outputs p(y|·, ·) and pˆ(y|·, ·), typically quantiﬁed by divergence or distance
+metrics such as Kullback-Leibler (KL) divergence [49], cross-
+entropy [51], and mean square error (MSE) [37]. See Figure 3
+for an illustration of consistency regularization.
+
+2.2.1.1 Consistency regularization under input variations
+Various strategies aim to generate different versions of the same input (xˆ in Eq. (2)) enforcing consistency (distributional smoothness) under input variations as depicted in Fig. 3 (a). Techniques range from simple random augmentation [37], [46], to more advanced transformations such as adversarial perturbation [49], MixUp [26], [75], as well as stronger automated augmentation such as AutoAugment [76], RandAugment [77], CTAugment [27] and Cutout [78]. Below we review these four streams of models. Random augmentation is a standard data transformation strategy widely adopted [37], [39], [46] via adding Gaussian noise and applying simple domain-speciﬁc jittering such
+
+data transformation
+
+xˆ
+<latexit sha1_base64="eMZlA8nAWJ7UtnYM47w3UD6h9XM=">AAACA3icbVDLSgMxFM34rPU16k43wSLUTZmpgoIIRTcuK9gHdIYhk2ba0EwyJhlpGQpu/BU3LhRx60+4829MHwttPXDhcM693HtPmDCqtON8WwuLS8srq7m1/PrG5ta2vbNbVyKVmNSwYEI2Q6QIo5zUNNWMNBNJUBwy0gh71yO/8UCkooLf6UFC/Bh1OI0oRtpIgb3vdZHO+kN4Ce+DfrF/AT2SKMoEPw7sglNyxoDzxJ2SApiiGthfXlvgNCZcY4aUarlOov0MSU0xI8O8lyqSINxDHdIylKOYKD8b/zCER0Zpw0hIU1zDsfp7IkOxUoM4NJ0x0l01643E/7xWqqNzP6M8STXheLIoShnUAo4CgW0qCdZsYAjCkppbIe4iibA2seVNCO7sy/OkXi65J6Xy7WmhcjWNIwcOwCEoAhecgQq4AVVQAxg8gmfwCt6sJ+vFerc+Jq0L1nRmD/yB9fkDzwaW+w==</latexit>
+
+=
+
+qx(x; ✏)
+
+xˆ <latexit sha1_base64="mabZmWMmUSa6qajBkkBtH11mLPk=">AAAB7nicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3bpZhN2J2IJ/RFePCji1d/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//ci1EbF6wEnC/YgOlQgFo2ildm9EMXua9ssVt+rOQVaJl5MK5Gj0y1+9QczSiCtkkhrT9dwE/YxqFEzyaamXGp5QNqZD3rVU0YgbP5ufOyVnVhmQMNa2FJK5+nsio5ExkyiwnRHFkVn2ZuJ/XjfF8NrPhEpS5IotFoWpJBiT2e9kIDRnKCeWUKaFvZWwEdWUoU2oZEPwll9eJa1a1buo1u4vK/WbPI4inMApnIMHV1CHO2hAExiM4Rle4c1JnBfn3flYtBacfOYY/sD5/AGxio/N</latexit>
+
+input sample
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+pˆ(y|xˆ; ✓)
+<latexit sha1_base64="jakjWJoiBdhbORfaQgvPTQ0qSzA=">AAACA3icbZDLSsNAFIYnXmu9Vd3pZrAIdVOSKii4KbpxWcFeoC1lMp00QyeTMHMihlhw46u4caGIW1/CnW/jNO1CW38Y+PjPOZw5vxsJrsG2v62FxaXlldXcWn59Y3Nru7Cz29BhrCir01CEquUSzQSXrA4cBGtFipHAFazpDq/G9eYdU5qH8haSiHUDMpDc45SAsXqF/Y5PII1GpeQho/vRBe6Az4Ac9wpFu2xnwvPgTKGIpqr1Cl+dfkjjgEmggmjdduwIuilRwKlgo3wn1iwidEgGrG1QkoDpbprdMMJHxuljL1TmScCZ+3siJYHWSeCazoCAr2drY/O/WjsG77ybchnFwCSdLPJigSHE40BwnytGQSQGCFXc/BVTnyhCwcSWNyE4syfPQ6NSdk7KlZvTYvVyGkcOHaBDVEIOOkNVdI1qqI4oekTP6BW9WU/Wi/VufUxaF6zpzB76I+vzBx+al9A=</latexit>
+p(y|x; ✓)
+<latexit sha1_base64="H3VRYN/JYGNREcJ+ZZM1d4x47J4=">AAAB9XicbVBNS8NAEN3Ur1q/qh69LBahXkpSBQUvRS8eK9gPaGPZbDft0s0m7E7UEPs/vHhQxKv/xZv/xm2bg7Y+GHi8N8PMPC8SXINtf1u5peWV1bX8emFjc2t7p7i719RhrChr0FCEqu0RzQSXrAEcBGtHipHAE6zlja4mfuueKc1DeQtJxNyADCT3OSVgpLuonDw9XuAuDBmQ416xZFfsKfAicTJSQhnqveJXtx/SOGASqCBadxw7AjclCjgVbFzoxppFhI7IgHUMlSRg2k2nV4/xkVH62A+VKQl4qv6eSEmgdRJ4pjMgMNTz3kT8z+vE4J+7KZdRDEzS2SI/FhhCPIkA97liFERiCKGKm1sxHRJFKJigCiYEZ/7lRdKsVpyTSvXmtFS7zOLIowN0iMrIQWeohq5RHTUQRQo9o1f0Zj1YL9a79TFrzVnZzD76A+vzB7/ZkgU=</latexit>
+
+unsupervised loss
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+
+(a) consistency regularization under input variations
+
+model transformation
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+input sample
+
+✓ˆ =
+<latexit sha1_base64="YSizYZN3xucopkpIL61SpIsD0II=">AAACEHicbVDLSgMxFM34rPU16tJNsIh1U2aqoCBC0Y3LCvYBnWHIpJk2NPMguSOUoZ/gxl9x40IRty7d+Tem7QjaeiDJyTn3ktzjJ4IrsKwvY2FxaXlltbBWXN/Y3No2d3abKk4lZQ0ai1i2faKY4BFrAAfB2olkJPQFa/mD67HfumdS8Ti6g2HC3JD0Ih5wSkBLnnnk9AlkDvQZkBG+xIH3cylPzwvs6P3YM0tWxZoAzxM7JyWUo+6Zn043pmnIIqCCKNWxrQTcjEjgVLBR0UkVSwgdkB7raBqRkCk3mww0woda6eIglnpFgCfq746MhEoNQ19XhgT6atYbi/95nRSCczfjUZICi+j0oSAVGGI8Tgd3uWQUxFATQiXXf8W0TyShoDMs6hDs2ZHnSbNasU8q1dvTUu0qj6OA9tEBKiMbnaEaukF11EAUPaAn9IJejUfj2Xgz3qelC0bes4f+wPj4BhXwnJg=</latexit>
+
+f✓(✓; ⌘)
+
+model
+
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+pˆ(y|x; ✓ˆ)
+<latexit sha1_base64="RPD3Op3DN2ps7H2BsOZniM/MT4w=">AAACA3icbVDLSgMxFM34rPVVdaebYBHqpsxUQcFN0Y3LCvYBbSmZNNMJzWSG5I44jAU3/oobF4q49Sfc+Tem0y609cCFk3PuJfceNxJcg21/WwuLS8srq7m1/PrG5tZ2YWe3ocNYUVanoQhVyyWaCS5ZHTgI1ooUI4ErWNMdXo395h1TmofyFpKIdQMykNzjlICReoX9jk8gjUal5OH+AmePDvgMyOi4VyjaZTsDnifOlBTRFLVe4avTD2kcMAlUEK3bjh1BNyUKOBVslO/EmkWEDsmAtQ2VJGC6m2Y3jPCRUfrYC5UpCThTf0+kJNA6CVzTGRDw9aw3Fv/z2jF4592UyygGJunkIy8WGEI8DgT3uWIURGIIoYqbXTH1iSIUTGx5E4Ize/I8aVTKzkm5cnNarF5O48ihA3SISshBZ6iKrlEN1RFFj+gZvaI368l6sd6tj0nrgjWd2UN/YH3+ABxil9A=</latexit>
+p(y|x; ✓)
+<latexit sha1_base64="H3VRYN/JYGNREcJ+ZZM1d4x47J4=">AAAB9XicbVBNS8NAEN3Ur1q/qh69LBahXkpSBQUvRS8eK9gPaGPZbDft0s0m7E7UEPs/vHhQxKv/xZv/xm2bg7Y+GHi8N8PMPC8SXINtf1u5peWV1bX8emFjc2t7p7i719RhrChr0FCEqu0RzQSXrAEcBGtHipHAE6zlja4mfuueKc1DeQtJxNyADCT3OSVgpLuonDw9XuAuDBmQ416xZFfsKfAicTJSQhnqveJXtx/SOGASqCBadxw7AjclCjgVbFzoxppFhI7IgHUMlSRg2k2nV4/xkVH62A+VKQl4qv6eSEmgdRJ4pjMgMNTz3kT8z+vE4J+7KZdRDEzS2SI/FhhCPIkA97liFERiCKGKm1sxHRJFKJigCiYEZ/7lRdKsVpyTSvXmtFS7zOLIowN0iMrIQWeohq5RHTUQRQo9o1f0Zj1YL9a79TFrzVnZzD76A+vzB7/ZkgU=</latexit>
+
+unsupervised loss
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+
+(b) consistency regularization under model variations
+
+Fig. 3: In consistency regularization (§2.2.1) (a) input variations vs (b) model variations, where variations can be induced by transformation on input data or model weights.
+
+as ﬂipping and cropping on image data. For instance, the Π-model [37], [46], applies random data augmentation on the same input and minimizes a consistency regularization term (MSE) between two network outputs. Ensemble transformations [47] introduces more diverse data augmentation on input images, including spatial transformations (i.e., projective, afﬁne, similarity, euclidean transformations) to modify the spatial aspect ratio, as well as non-spatial transformations to change the color, contrast, brightness, and sharpness. This way, the model learns representations invariant to various transformations.
+Adversarial perturbation augments the input data by adding adversarial noise aiming to alter the model predictions, e.g., reducing predictive conﬁdence or changing the predicted correct label [79], [80]. Adversarial noise is introduced for SSL to augment data and learn from the unlabeled data with adversarial transformations [48], [49], [74], [81]. Virtual Adversarial Training (VAT) [48], [49] is the ﬁrst representative SSL method that perturbs input data adversarially. In VAT, a small adversarial perturbation is added to each input and a consistency regularization term (i.e., KL divergence) is imposed to encourage distributional robustness of the model against the virtual adversarial direction. Notably, it has been discovered that semi-supervised learning with adversarial perturbed unlabeled data does not only improve model generalization, but it also enhances robustness to adversarial attacks [81], [82].
+MixUp is a simple and data-agnostic augmentation strategy by performing linear interpolations on two inputs and their corresponding labels [75]. It is also introduced as an effective regularizer for SSL [26], [50]. The Interpolation Consistency Training (ICT) [50] interpolates two unlabeled samples and their network outputs. MixMatch [26] further considers to mix a labeled sample and unlabeled sample as the input, and the groundtruth label (of labeled data) and the predicted label (of unlabeled data) as the output targets. Both methods impose consistency regularization to guide the learning of a mapping between the interpolated input and interpolated output to learn from unlabeled data.
+Automated augmentation learns augmentation strategies from data to produce strong samples, alleviating the need
+
+4
+TABLE 1: A taxonomy on semi-supervised deep learning methods, including ﬁve representative families in §2.2.1 – §2.2.5.
+
+Families of Models
+
+Model Rationale
+
+Representative Strategies and Methods
+
+Random augmentation
+
+Π-model [37], [46], ensemble transformations [47]
+
+Adversarial perturbation
+
+Virtual Adversarial Training (VAT) [48], [49]
+
+Consistency regularization MixUp Automated augmentation
+
+MixMatch [26], ICT [50] ReMixMatch [27], UDA [51], FixMatch [38]
+
+Stochastic perturbation
+
+Pseudo-Ensembles [52], Ladder Network [53], Virtual Adversarial Dropout [54], WCP [55]
+
+Ensembling
+
+Temporal Ensembling [37], Mean Teacher [39], SWA [41], UASD [14]
+
+Entropy minimization
+
+Pseudo-Label [56], MixMatch [26], ReMixMatch [27], Memory [57]
+
+Self-training
+
+Co-training
+
+Deep Co-training [58], Tri-training [59]
+
+Distillation
+
+model distillation (Noisy Student Training [60], UASD [14]), data distillation [35]
+
+Graph-based regularization Graph-based feature regularizer EmbedNN [44], Teacher Graph [61], Graph Convolutional Networks [62] Graph-based prediction regularizer Label Propagation [63]
+
+Deep generative models
+
+Variational auto-encoders
+
+Class-conditional VAE [64], ADGM [65]
+
+Generative adversarial networks CatGAN [66], FM-GAN [67], ALI [68], BadGAN [69], Localized GAN [70]
+
+Self-supervised learning Self-supervision
+
+S4L [71], SimCLR [12], SimCLRv2 [72]
+
+to manually design domain-speciﬁc data augmentation [76], [77], [83], [84], [85]. It is introduced for SSL by enforcing that the predicted labels of a weakly-augmented or clean sample and its strongly augmented versions derived from automated augmentation [27], [51] are consistent. Inspired by the advances of AutoAugment [76], ReMixMatch [27] introduces CTAugment to learn an automated augmentation policy. Unsupervised Data Augmentation (UDA) [51] adopts RandAugment [77] to produce more diverse and strongly augmented samples by uniformly sampling a set of standard transformations based on the Python Image Library. Later on, FixMatch [38] uniﬁes multiple augmentation strategies including Cutout [78], CTAugment [27], and RandAugment [77] and produces even more strongly augmented samples as input.
+2.2.1.2 Consistency regularization under model variations
+To impose the predictive consistency under model variations (i.e., variations made in the model’s parameter space) as in Eq. (3), stochastic perturbation [52], [53], [54] and ensembling [37], [39], [86] are proposed. Via non-identical models they produce different outputs for the same input – a new model variant is denoted by θˆ in Eq. (3). Below we review these two streams of works as depicted in Fig. 3 (b). Stochastic perturbation introduces slight modiﬁcations on the model weights by adding Gaussian noise, dropout, or adversarial noise in a class-agnostic manner [52], [53], [54]. For example, Ladder Network injects layer-wise Gaussian noises into the network and minimizes a denoising L2 loss between outputs from the original network and the noisycorrupted network [53]. Pseudo-Ensemble applies dropout on the model’s parameters to obtain a collection of models (a pseudo-ensemble), while minimizing the disagreements (KL divergence) between the pseudo-ensemble and the model [52]. Similarly, Virtual Adversarial Dropout introduces adversarial dropout to selectively deactivates network neurons and minimizes the discrepancy between outputs from the original model and the perturbed model [54]. Worst-Case Perturbations (WCP) introduces both addictive perturbations and drop connections on model parameters, where drop connections set certain model weights to zero
+
+to further change the network structure [55]. Notably, these perturbation mechanisms promote the model robustness against noise in network parameters or structure.
+Ensembling learns a set of models covering different regions of the version space [87], [88], [89]. As demonstrated by seminal machine learning models such as boosting [90] and random forest [89], a set of different models can often provide more reliable predictions than a single model. Moreover, ensembling offers a rich inference uncertainty to mitigate the overconﬁdence issue in deep neural networks [91]. For SSL, an ensemble model is typically derived by computing an exponential moving average (EMA) or equal average in the prediction space or weight space [14], [37], [39], [41]. Temporal Ensembling [37] and Mean Teacher [39] are two representatives that ﬁrst propose to ensemble all the networks produced during training by maintaining an EMA in the weight space [39] or prediction space [37]. Stochastic Weight Averaging (SWA) [41] applies an equal average of the model parameters in the weight space to provide a more stable target for deriving the consistency cost. Later on, Uncertainty-Aware Self-Distillation (UASD) [14] computes an equal average of all the preceding model predictions during training to derive soft targets as the regularizer.
+Remarks. Consistency regularization can be treated as an auxiliary task where the model learns from the unlabeled data to minimize its predictive variance towards the variations in the input space or weight space. The predictive variance is generally quantiﬁed as the discrepancy between two predictive probability distributions or network outputs. By minimizing the consistency regularization loss, the model is encouraged to learn more powerful representations invariant towards variations added on each sample, without utilizing any additional label annotation.
+2.2.2 Self-Training
+Self-training methods learn from unlabeled data by imputing the labels for samples predicted with high conﬁdence [23], [24], [92]. It is originally proposed for conventional machine learning models such as logistic regression [92], bipartite graph [23] and Naive Bayes classiﬁer [24]. It is re-visited in deep neural networks to learn from massive unlabeled
+
+5
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+input sample
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss
+p(y|x; ✓)
+<latexit sha1_base64="H3VRYN/JYGNREcJ+ZZM1d4x47J4=">AAAB9XicbVBNS8NAEN3Ur1q/qh69LBahXkpSBQUvRS8eK9gPaGPZbDft0s0m7E7UEPs/vHhQxKv/xZv/xm2bg7Y+GHi8N8PMPC8SXINtf1u5peWV1bX8emFjc2t7p7i719RhrChr0FCEqu0RzQSXrAEcBGtHipHAE6zlja4mfuueKc1DeQtJxNyADCT3OSVgpLuonDw9XuAuDBmQ416xZFfsKfAicTJSQhnqveJXtx/SOGASqCBadxw7AjclCjgVbFzoxppFhI7IgHUMlSRg2k2nV4/xkVH62A+VKQl4qv6eSEmgdRJ4pjMgMNTz3kT8z+vE4J+7KZdRDEzS2SI/FhhCPIkA97liFERiCKGKm1sxHRJFKJigCiYEZ/7lRdKsVpyTSvXmtFS7zOLIowN0iMrIQWeohq5RHTUQRQo9o1f0Zj1YL9a79TFrzVnZzD76A+vzB7/ZkgU=</latexit>
+
+(a) entropy minimization
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+input sample
+
+model 1
+✓1 <latexit sha1_base64="b2Ff/oUFJw0eznxXS1RygRK2bZk=">AAAB73icbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3bpZhN3J0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilTg9HHGnf65crbtWdg6wSLycVyNHol796g5ilEVfIJDWm67kJ+hnVKJjk01IvNTyhbEyHvGupohE3fja/d0rOrDIgYaxtKSRz9fdERiNjJlFgOyOKI7PszcT/vG6K4bWfCZWkyBVbLApTSTAms+fJQGjOUE4soUwLeythI6opQxtRyYbgLb+8Slq1qndRrd1fVuo3eRxFOIFTOAcPrqAOd9CAJjCQ8Ayv8OY8Oi/Ou/OxaC04+cwx/IHz+QPOtY/Q</latexit>
+✓2 <latexit sha1_base64="oe3DagNbCs6bjj10ybLfZH9d5SY=">AAAB73icbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3bpZhN3J0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilTg9HHGm/1i9X3Ko7B1klXk4qkKPRL3/1BjFLI66QSWpM13MT9DOqUTDJp6VeanhC2ZgOeddSRSNu/Gx+75ScWWVAwljbUkjm6u+JjEbGTKLAdkYUR2bZm4n/ed0Uw2s/EypJkSu2WBSmkmBMZs+TgdCcoZxYQpkW9lbCRlRThjaikg3BW355lbRqVe+iWru/rNRv8jiKcAKncA4eXEEd7qABTWAg4Rle4c15dF6cd+dj0Vpw8plj+APn8wfQOY/R</latexit>
+model 2
+
+z1 <latexit sha1_base64="ao7YOVG3tXfGNeBI4fV/EOPiPPI=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120i7dbMLuRqihP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEsG1cd1vZ2V1bX1js7BV3N7Z3dsvHRw2dZwqhg0Wi1i1A6pRcIkNw43AdqKQRoHAVjC6mfqtR1Sax/LBjBP0IzqQPOSMGivdP/W8XqnsVtwZyDLxclKGHPVe6avbj1kaoTRMUK07npsYP6PKcCZwUuymGhPKRnSAHUsljVD72ezUCTm1Sp+EsbIlDZmpvycyGmk9jgLbGVEz1IveVPzP66QmvPIzLpPUoGTzRWEqiInJ9G/S5wqZEWNLKFPc3krYkCrKjE2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c0Rzovz7nzMW1ecfOYI/sD5/AEQCo2m</latexit>
+
+p1(y|x; ✓1)
+<latexit sha1_base64="uy6FppUw60SCfRbownm/z9vl8+U=">AAAB+3icbVDLSsNAFJ3UV62vWJduBotQNyWpgoKbohuXFewD2hAm00k7dPJg5kYaYn/FjQtF3Poj7vwbp20W2nrgwuGce7n3Hi8WXIFlfRuFtfWNza3idmlnd2//wDwst1WUSMpaNBKR7HpEMcFD1gIOgnVjyUjgCdbxxrczv/PIpOJR+ABpzJyADEPuc0pAS65Zjl27mj5NrnEfRgyIa5+5ZsWqWXPgVWLnpIJyNF3zqz+IaBKwEKggSvVsKwYnIxI4FWxa6ieKxYSOyZD1NA1JwJSTzW+f4lOtDLAfSV0h4Ln6eyIjgVJp4OnOgMBILXsz8T+vl4B/5WQ8jBNgIV0s8hOBIcKzIPCAS0ZBpJoQKrm+FdMRkYSCjqukQ7CXX14l7XrNPq/V7y8qjZs8jiI6Rieoimx0iRroDjVRC1E0Qc/oFb0ZU+PFeDc+Fq0FI585Qn9gfP4AlN6Tfg==</latexit>
+
+z2 <latexit sha1_base64="ZzKjtcJFGu2OAJipvjC2jutANLY=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRKihP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qlX7ZXKbsWdgSwTLydlyFHvlb66/ZilEVfIJDWm47kJ+hnVKJjkk2I3NTyhbEQHvGOpohE3fjY7dUJOrdInYaxtKSQz9fdERiNjxlFgOyOKQ7PoTcX/vE6K4ZWfCZWkyBWbLwpTSTAm079JX2jOUI4toUwLeythQ6opQ5tO0YbgLb68TJrVindeqd5dlGvXeRwFOIYTOAMPLqEGt1CHBjAYwDO8wpsjnRfn3fmYt644+cwR/IHz+QMRjo2n</latexit>
+
+p2(y|x; ✓2)
+<latexit sha1_base64="E7QjffTwBuiH+2XKkJJYeJdw30A=">AAAB+3icbVDLSsNAFJ3UV62vWJduBotQNyWpgoKbohuXFewD2hAm00k7dPJg5kYaYn/FjQtF3Poj7vwbp20W2nrgwuGce7n3Hi8WXIFlfRuFtfWNza3idmlnd2//wDwst1WUSMpaNBKR7HpEMcFD1gIOgnVjyUjgCdbxxrczv/PIpOJR+ABpzJyADEPuc0pAS65Zjt16NX2aXOM+jBgQt37mmhWrZs2BV4mdkwrK0XTNr/4goknAQqCCKNWzrRicjEjgVLBpqZ8oFhM6JkPW0zQkAVNONr99ik+1MsB+JHWFgOfq74mMBEqlgac7AwIjtezNxP+8XgL+lZPxME6AhXSxyE8EhgjPgsADLhkFkWpCqOT6VkxHRBIKOq6SDsFefnmVtOs1+7xWv7+oNG7yOIroGJ2gKrLRJWqgO9RELUTRBD2jV/RmTI0X4934WLQWjHzmCP2B8fkDl/aTgA==</latexit>
+
+unsupervised loss 1
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+unsupervised loss 2
+
+(b) co-training
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+
+teacher model (pre-trained)
+✓t <latexit sha1_base64="0OE9sXOZdhS2TS0TJHJoktvo254=">AAAB73icbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3bpZhN3J0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilTg9HHGkf++WKW3XnIKvEy0kFcjT65a/eIGZpxBUySY3pem6CfkY1Cib5tNRLDU8oG9Mh71qqaMSNn83vnZIzqwxIGGtbCslc/T2R0ciYSRTYzojiyCx7M/E/r5tieO1nQiUpcsUWi8JUEozJ7HkyEJozlBNLKNPC3krYiGrK0EZUsiF4yy+vklat6l1Ua/eXlfpNHkcRTuAUzsGDK6jDHTSgCQwkPMMrvDmPzovz7nwsWgtOPnMMf+B8/gA0UJAT</latexit>
+
+zt <latexit sha1_base64="aHfNUXx++jhvwymJ/SRhirLgTiA=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRKihP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmHvVLZrbgzkGXi5aQMOeq90le3H7M04gqZpMZ0PDdBP6MaBZN8UuymhieUjeiAdyxVNOLGz2anTsipVfokjLUthWSm/p7IaGTMOApsZ0RxaBa9qfif10kxvPIzoZIUuWLzRWEqCcZk+jfpC80ZyrEllGlhbyVsSDVlaNMp2hC8xZeXSbNa8c4r1buLcu06j6MAx3ACZ+DBJdTgFurQAAYDeIZXeHOk8+K8Ox/z1hUnnzmCP3A+fwB1lo3p</latexit>
+
+input sample
+
+✓s <latexit sha1_base64="tEN7BW2qV/mc/uOjX2kJ4mmATUs=">AAAB73icbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3bpZhN3J0IJ/RNePCji1b/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilTg9HHGnf9MsVt+rOQVaJl5MK5Gj0y1+9QczSiCtkkhrT9dwE/YxqFEzyaamXGp5QNqZD3rVU0YgbP5vfOyVnVhmQMNa2FJK5+nsio5ExkyiwnRHFkVn2ZuJ/XjfF8NrPhEpS5IotFoWpJBiT2fNkIDRnKCeWUKaFvZWwEdWUoY2oZEPwll9eJa1a1buo1u4vK/WbPI4inMApnIMHV1CHO2hAExhIeIZXeHMenRfn3flYtBacfOYY/sD5/AEyzJAS</latexit>
+student model
+
+ps(y|x; ✓s)
+<latexit sha1_base64="2aHDfL9FGjY7YgFDTZjFB+I3bKg=">AAAB+3icbVDLSsNAFJ3UV62vWJduBotQNyWpgoKbohuXFewD2hAm00k7dPJg5kYaYn/FjQtF3Poj7vwbp20W2nrgwuGce7n3Hi8WXIFlfRuFtfWNza3idmlnd2//wDwst1WUSMpaNBKR7HpEMcFD1gIOgnVjyUjgCdbxxrczv/PIpOJR+ABpzJyADEPuc0pAS65Zjl1VTZ8m17gPIwbEVWeuWbFq1hx4ldg5qaAcTdf86g8imgQsBCqIUj3bisHJiAROBZuW+oliMaFjMmQ9TUMSMOVk89un+FQrA+xHUlcIeK7+nshIoFQaeLozIDBSy95M/M/rJeBfORkP4wRYSBeL/ERgiPAsCDzgklEQqSaESq5vxXREJKGg4yrpEOzll1dJu16zz2v1+4tK4yaPo4iO0QmqIhtdoga6Q03UQhRN0DN6RW/G1Hgx3o2PRWvByGeO0B8Ynz9hHZQC</latexit>
+
+(c) distillation
+
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+unsupervised loss
+
+Fig. 4: In self-training, (a) the model prediction is enforced to have low entropy, (b) two models learn from each other and (c) the student model learns from the teacher model.
+
+data along with limited labeled data. We review three representative lines of works in self-training, including entropy minimization, co-training and distillation as follows. See Figure 4 for an illustration of self-training.
+Entropy minimization regularizes the model training based on the low density separation assumption [45], [92], to enforce that the class decision boundary is placed in the low density regions. This is also in line with the cluster assumption and manifold assumption [42], [44], which hypothesizes that data points from the same class are likely to share the same cluster or manifold. Formally, the entropy minimization objective can be formulated as:
+
+min
+
+−
+
+θ x∈D
+
+Kj=1p(yj|x; θ) log p(yj|x; θ) ,
+
+(4)
+
+where K refers to the number of classes. p(yj|x; θ) is the probability of assigning the sample x to the class yj. This measures the class overlap. As a lower entropy indicates a higher conﬁdence in model prediction, minimizing Eq. (4) enforces each unlabeled sample to be assigned to the class predicted with the highest probability. Although entropy minimization is originally proposed for logistic regression to impute the labels of samples classiﬁed with high conﬁdence [92], it is later extended to train deep neural networks in SSL setting by minimizing the entropy of the class assignments either derived in the prediction space [26], [27], [38], [49], [56], [93] or the feature space [57], as detailed next.
+Entropy minimization can be imposed in the prediction space, e.g., Pseudo-Label [56] directly assigns each sample to the class label predicted with the maximum probability, which implicitly minimizes the entropy of model predictions. When pseudo labels are one-hot vectors, they could
+
+easily cause error propagation due to the wrong label assignments. To alleviate this risk, MixMatch [26] uses an ensemble of predictions over different input augmentations, and softly sharpens the one-hot pseudo labels with a temperature hyperparameter. Similarly, FixMatch [38] assigns the one-hot labels only when the conﬁdence scores of the model predictions are higher than a certain threshold.
+Entropy minimization can also be imposed in the feature space, as it is feasible to derive the class assignments based on proximities to class-level prototypes (e.g., cluster centers) in the feature space [57], [94]. In [57], a Memory module learns a center per class that is derived based on proximities to all the cluster centers. Each unlabeled sample is assigned to the nearest cluster center by minimizing the entropy.
+Co-training learns two or more classiﬁers on more than one view of the same sample coming from different sources [7], [23], [24], [58], [59]. Conceptually, a co-training framework [23], [24] trains two independent classiﬁer models on two different but complementary data views and imputes the predicted labels in a cross-model manner. It is later extended for deep visual learning [58], [59], [95], e.g., Deep Co-training (DCT) [58] trains a network with two or more classiﬁcation layers, and passes different views (e.g., the original view and the adversarial view [96]) to individual classiﬁers for co-training, while an unsupervised loss is imposed to minimize the similarity of predictions from different views. The basic idea of co-training can be extended from dual-view [58] to triple [59] or multi-view [58] – e.g., in Tri-training [59], three classiﬁers are trained together, with labels assigned to the unlabeled data when two of the classiﬁers agree on the predictions and the conﬁdence scores are higher than a threshold. Formally, the deep co-training objective can be written as:
+
+min
+θ
+
+d(p1(y|x; θ1), z2) + d(p2(y|x; θ2), z1),
+x∈D
+
+(5)
+
+where p1, p2 are predictions of two independent classiﬁers θ1, θ2 trained on different data views. d(·, ·) introduces the similarity metric to learn from the imputed targets z1, z2 from each other, e.g., cross-entropy on one-hot targets [59], or Jensen-Shannon divergence between output targets [58].
+Distillation is originally proposed to transfer the knowledge learned by a teacher model to a student model, where the soft targets from the teacher model (e.g., an ensemble of networks or a larger network) can serve as an effective regularizer or a model compression strategy to train a student model [97], [98], [99]. Recent works in SSL use distillation to impute learning targets on the unlabeled data for training the student network [14], [35], [60], [100]. Formally, an unsupervised distillation objective is introduced on a student model θs to learn from the unlabeled data as:
+
+min
+θ
+
+d(ps(y|x; θs), zt),
+x∈D
+
+(6)
+
+where the student prediction ps is enforced to align with the targets zt produced by a teacher model θt on either the unlabeled data or all the data. Compared to co-training (Eq. (5)), distillation in SSL (Eq. (6)) does not optimize multiple networks simultaneously, but instead trains more than one network in different stages. In distillation, the existing works can be further grouped into model distillation
+
+6
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+input sample
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+build NN graph
+Lunsup <latexit sha1_base64="JL9zGflPs0aTRBpXxc5BzywF5NM=">AAACA3icbVBNS8NAEN3Ur1q/ot70EiyCp5JUQY9FLx48VLAf0ISw2W7bpZtN2J2IJQS8+Fe8eFDEq3/Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QB0kSoJM4y36zaNXsKa5E4BamiAk3f/HL7EUlCKoBwrFTPsWPwUiyBEU6zipsoGmMyxkPa01TgkCovnf6QWcda6VuDSOoSYE3V3xMpDpWahIHuzC9W814u/uf1EhhceCkTcQJUkNmiQcItiKw8EKvPJCXAJ5pgIpm+1SIjLDEBHVtFh+DMv7xI2vWac1qr355VG5dFHGV0iI7QCXLQOWqga9RELUTQI3pGr+jNeDJejHfjY9ZaMoqZffQHxucPsxyY2A==</latexit>
+unsupervised loss
+
+Fig. 5: In graph-based regularization (§2.2.3) pseudo labels are propagated over the Nearest Neighbor graph based on neighbourhood consistency and an unsupervised regularization term is imposed on the feature or prediction space.
+
+and data distillation, which generate learning targets for unlabeled data using the teacher model output or multiple forward passes of the same input data, as detailed next.
+In model distillation, labels from a teacher are assigned to a student [14], [60], [100]. The teacher model can be formed, e.g., via a pre-trained model or an ensemble of models. In Noisy Student Training [60], an iterative self-training process iterates the teacher-student training by ﬁrst training a teacher to impute labels on unlabeled data for the student, and reuses the student as the teacher in the next iteration. In Uncertainty-Aware Self-Distillation (USAD) [14], the teacher averages all the preceding network predictions to impute labels on unlabeled data for updating the student network itself. In model distillation, both soft targets and one-hot labels from the teacher model can serve as the learning targets on the unlabeled data [14], [60].
+In data distillation, the teacher model predicts learning targets on unlabeled data by ensembling the outputs of the same input under different data transformations [35]. Speciﬁcally, the ensembled teacher predictions (i.e., soft targets) are derived by averaging the outputs of the same inputs under multiple data transformations; while the student model is then trained with the soft targets. Data distillation transforms the input data multiple times rather than training multiple networks to impute the ensembled predictions on unlabeled data. This is similar to consistency regularization with random data augmentation; however, in data distillation, two training stages are involved – the ﬁrst stage involves pre-training the teacher model; while the second stage involves training the student network to mimic the teacher model by distillation.
+Remarks. Similar to consistency regularization, self-training can be considered as an unsupervised auxiliary task learned along with the supervised learning task. In general, it also enforces the predictive invariance towards instancewise variations or the teacher’s predictions. However, selftraining differs in design. While consistency regularization generally trains one model, self-training may require more than one model to be trained, e.g., co-training requires at least two models trained in parallel while distillation requires to train a teacher and a student model sequentially.
+2.2.3 Graph-based Regularization
+Graph-based regularization is a family of transductive learning methods originally proposed for non-deep semi-supervised learning algorithms [42], [73], [101], [102], [103], such as transductive Support Vector Machine [42], [102] and Gaussian random ﬁeld model [101]. Most algorithms from this
+
+family build a weighted graph to exploit relationships among the data samples. Speciﬁcally, both labeled and unlabeled samples are represented as nodes, while the edge weights encode the similarities between different samples. The labels can be propagated over the graph based on the smoothness assumption [42], i.e., neighboring data points should share the same class label as shown in Figure 5.
+A graph-based regularization term is used in model optimization by imposing various forms of smoothness constraints to minimize the pairwise similarities between nearby data points. Graph-based regularization is later reformulated for semi-supervised learning with deep neural networks, such as EmbedNN [44], Graph Convolutional Network [62], [104], Teacher Graph [61], and Label Propagation [63]. Although this line of works share the same smoothness assumption for model optimization, graphbased regularization can be imposed differently in either the feature space or prediction space, detailed as follows.
+Graph-based feature regularization is typically done by building a learnable nearest neighbor (NN) graph that augments the original DNN to encode the afﬁnity between data points in the feature space, as represented by EmbedCNN [44] and Teacher Graph [61]. Each node in the graph is encoded by the visual feature extracted from the intermediate network layer or the output from the last layer; while an afﬁnity matrix Wij is computed to encode the pairwise similarities between all the nodes. To exploit unlabeled data, a graph-based regularization term can be formed as a metric learning loss, such as the margin-based contrastive loss for Siamese networks [105], [106] which constrains feature learning by enforcing the local smoothness:
+
+min
+θ xi,xj ∈D
+
+h(xi) − h(xj) 2, max(0, m − ||h(xi) − h(xj)||)2,
+
+if Wij =1 if Wij =0
+
+(7)
+
+ensuring that features h(xi), h(xj) of nearest neighbors (i.e.,
+
+Wij=1) are close to and dissimilar pairs (i.e., Wij=0) are
+
+away from each other with a distance margin m.
+
+Beyond augmenting a DNN with a graph, a more ﬂexible
+
+way is to use graph convolutions, i.e., Graph Convolutional
+
+Networks (GCN) [62], which derive new feature representations for each node subject to the graph structure [104],
+
+[107]. Speciﬁcally, a GCN takes the data and afﬁnity matrix
+
+as input, and learns to estimate the class labels of unlabeled data under a supervised cross-entropy loss on labeled data.
+
+Graph-based prediction regularization operates in the prediction space [63], [108], as in Label Propagation [63]. Driven by the same rationale of building a learnable NN-graph
+
+as above, in label propagation, an NN-graph encidong the similarity between data points is used to propagate the labels from the labeled data to the unlabeled data based
+
+on transitivity via with a cross-entropy loss. While being similar to the approach Pseudo-Labels [56], the propagated labels are derived with an external NN-graph that encodes
+
+the global manifold structure. Further, label propagation on the graph and the update of DNN are performed alternatively to propagate more reliable labels.
+
+Remarks. Graph-based regularization shares several similarities with consistency regularization and self-training in SSL. First, it introduces an unsupervised auxiliary task to
+
+7
+
+z <latexit sha1_base64="VLEo6VgUnu2TnOxoOkqsMPXvyTo=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtYECV/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOqPjQI=</latexit>
+noise
+
+generator
+✓G <latexit sha1_base64="v65/jXUKQUWzOLfMQdcfIdjMAC4=">AAAB73icbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj0oMcK9gPaUDbbTbt0s4m7E6GE/gkvHhTx6t/x5r9x2+agrQ8GHu/NMDMvSKQw6Lrfzsrq2vrGZmGruL2zu7dfOjhsmjjVjDdYLGPdDqjhUijeQIGStxPNaRRI3gpGN1O/9cS1EbF6wHHC/YgOlAgFo2ildheHHGnvtlcquxV3BrJMvJyUIUe9V/rq9mOWRlwhk9SYjucm6GdUo2CST4rd1PCEshEd8I6likbc+Nns3gk5tUqfhLG2pZDM1N8TGY2MGUeB7YwoDs2iNxX/8zophld+JlSSIldsvihMJcGYTJ8nfaE5Qzm2hDIt7K2EDammDG1ERRuCt/jyMmlWK955pXp/Ua5d53EU4BhO4Aw8uIQa3EEdGsBAwjO8wpvz6Lw4787HvHXFyWeO4A+czx/wDY/m</latexit>
+
+xG <latexit sha1_base64="b1TAZKXqUEa8t54y6fGRvY2LH8E=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKexGQY9BD3qMaB6QLGF2MkmGzM4uM71iWPIJXjwo4tUv8ubfOEn2oIkFDUVVN91dQSyFQdf9dnIrq2vrG/nNwtb2zu5ecf+gYaJEM15nkYx0K6CGS6F4HQVK3oo1p2EgeTMYXU/95iPXRkTqAccx90M6UKIvGEUr3T91b7rFklt2ZyDLxMtICTLUusWvTi9iScgVMkmNaXtujH5KNQom+aTQSQyPKRvRAW9bqmjIjZ/OTp2QE6v0SD/SthSSmfp7IqWhMeMwsJ0hxaFZ9Kbif147wf6lnwoVJ8gVmy/qJ5JgRKZ/k57QnKEcW0KZFvZWwoZUU4Y2nYINwVt8eZk0KmXvrFy5Oy9Vr7I48nAEx3AKHlxAFW6hBnVgMIBneIU3RzovzrvzMW/NOdnMIfyB8/kDLlaNug==</latexit>
+
+(fake)
+
+unlabeled sample
+
+discriminator
+✓D <latexit sha1_base64="aR/yzCvQTkw+G1bkPJWxzYcYyAY=">AAAB73icbVBNS8NAEJ34WetX1aOXxSJ4KkkV9FjUg8cK9gPaUDbbTbt0s4m7E6GE/gkvHhTx6t/x5r9x2+agrQ8GHu/NMDMvSKQw6Lrfzsrq2vrGZmGruL2zu7dfOjhsmjjVjDdYLGPdDqjhUijeQIGStxPNaRRI3gpGN1O/9cS1EbF6wHHC/YgOlAgFo2ildheHHGnvtlcquxV3BrJMvJyUIUe9V/rq9mOWRlwhk9SYjucm6GdUo2CST4rd1PCEshEd8I6likbc+Nns3gk5tUqfhLG2pZDM1N8TGY2MGUeB7YwoDs2iNxX/8zophld+JlSSIldsvihMJcGYTJ8nfaE5Qzm2hDIt7K2EDammDG1ERRuCt/jyMmlWK955pXp/Ua5d53EU4BhO4Aw8uIQa3EEdGsBAwjO8wpvz6Lw4787HvHXFyWeO4A+czx/rgY/j</latexit>
+
+xl <latexit sha1_base64="hgDgYhHEJVquJzazbbQDPq+ktTA=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120i7dbMLuRiyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEsG1cd1vZ2V1bX1js7BV3N7Z3dsvHRw2dZwqhg0Wi1i1A6pRcIkNw43AdqKQRoHAVjC6mfqtR1Sax/LBjBP0IzqQPOSMGivdP/VEr1R2K+4MZJl4OSlDjnqv9NXtxyyNUBomqNYdz02Mn1FlOBM4KXZTjQllIzrAjqWSRqj9bHbqhJxapU/CWNmShszU3xMZjbQeR4HtjKgZ6kVvKv7ndVITXvkZl0lqULL5ojAVxMRk+jfpc4XMiLEllClubyVsSBVlxqZTtCF4iy8vk2a14p1XqncX5dp1HkcBjuEEzsCDS6jBLdShAQwG8Ayv8OYI58V5dz7mrStOPnMEf+B8/gBmao3f</latexit>
+
+(real)
+
+labeled sample
+
+p(y|xG; ✓D)
+<latexit sha1_base64="9SAxSpvAUWjpE/q+yKf6V0YKPac=">AAAB+3icbVDLSgNBEJyNrxhfazx6GQxCvITdKCh4CSroMYJ5QLIss5PZZMjsg5leyRLzK148KOLVH/Hm3zhJ9qCJBQ1FVTfdXV4suALL+jZyK6tr6xv5zcLW9s7unrlfbKookZQ1aCQi2faIYoKHrAEcBGvHkpHAE6zlDa+nfuuRScWj8AHSmDkB6Yfc55SAllyzGJfTp5F7e4m7MGBA3JsT1yxZFWsGvEzsjJRQhrprfnV7EU0CFgIVRKmObcXgjIkETgWbFLqJYjGhQ9JnHU1DEjDljGe3T/CxVnrYj6SuEPBM/T0xJoFSaeDpzoDAQC16U/E/r5OAf+GMeRgnwEI6X+QnAkOEp0HgHpeMgkg1IVRyfSumAyIJBR1XQYdgL768TJrVin1aqd6flWpXWRx5dIiOUBnZ6BzV0B2qowaiaISe0St6MybGi/FufMxbc0Y2c4D+wPj8AdTxk6c=</latexit>
+
+unsupervised loss (minimax loss)
+real fake
+
+p(y|xl; ✓D)
+<latexit sha1_base64="pST/jASB2ckMRROKy6l8T28jah8=">AAAB+3icbVDLSsNAFJ34rPUV69LNYBHqpiRVUHBT1IXLCvYBbQiT6aQdOnkwcyMNsb/ixoUibv0Rd/6N0zYLbT1w4XDOvdx7jxcLrsCyvo2V1bX1jc3CVnF7Z3dv3zwotVSUSMqaNBKR7HhEMcFD1gQOgnViyUjgCdb2RjdTv/3IpOJR+ABpzJyADELuc0pAS65Ziivp09gVV7gHQwbEvT11zbJVtWbAy8TOSRnlaLjmV68f0SRgIVBBlOraVgxORiRwKtik2EsUiwkdkQHrahqSgCknm90+wSda6WM/krpCwDP190RGAqXSwNOdAYGhWvSm4n9eNwH/0sl4GCfAQjpf5CcCQ4SnQeA+l4yCSDUhVHJ9K6ZDIgkFHVdRh2AvvrxMWrWqfVat3Z+X69d5HAV0hI5RBdnoAtXRHWqgJqJojJ7RK3ozJsaL8W58zFtXjHzmEP2B8fkDDquTzA==</latexit>
+
+Lsup <latexit sha1_base64="q3ICsgq0CN99VyghbiiWSmcDDF8=">AAACAXicbVBNS8NAEN3Ur1q/ol4EL8EieCpJFfRY9OLBQwX7AU0Im+22XbrZhN2JWEK8+Fe8eFDEq//Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QBUpXEWeabVbtmT2EtEqcgVVSg6Ztfbj8iSUgFEI6V6jl2DF6KJTDCaVZxE0VjTMZ4SHuaChxS5aXTDzLrWCt9axBJXQKsqfp7IsWhUpMw0J35vWrey8X/vF4CgwsvZSJOgAoyWzRIuAWRlcdh9ZmkBPhEE0wk07daZIQlJqBDq+gQnPmXF0m7XnNOa/Xbs2rjsoijjA7RETpBDjpHDXSNmqiFCHpEz+gVvRlPxovxbnzMWktGMbOP/sD4/AH7ypfh</latexit>
+supervised loss
+
+Fig. 6: In GAN-based deep generative models (§2.2.4), the
+
+discriminator
+
+assigns
+
+the
+
+labeled
+
+sapm(yp=lKes+1t|oxGt)he <latexit sha1_base64="kJdGMl4cqHogJlk0IBBP4Kbi/Dc=">AAAB+XicbVDLSsNAFJ3UV62vqEs3g0WoCCWpgm6EogsFNxXsA9oQJtNJO3QyCTOTYoj5EzcuFHHrn7jzb5y2WWjrgQuHc+7l3nu8iFGpLOvbKCwtr6yuFddLG5tb2zvm7l5LhrHApIlDFoqOhyRhlJOmooqRTiQICjxG2t7oeuK3x0RIGvIHlUTECdCAU59ipLTkmmZUSdLL7C49yeynR/fm2DXLVtWaAi4SOydlkKPhml+9fojjgHCFGZKya1uRclIkFMWMZKVeLEmE8AgNSFdTjgIinXR6eQaPtNKHfih0cQWn6u+JFAVSJoGnOwOkhnLem4j/ed1Y+RdOSnkUK8LxbJEfM6hCOIkB9qkgWLFEE4QF1bdCPEQCYaXDKukQ7PmXF0mrVrVPq7X7s3L9Ko+jCA7AIagAG5yDOrgFDdAEGIzBM3gFb0ZqvBjvxsestWDkM/vgD4zPH5MAkvc=</latexit>
+
+K
+
+classes
+
+and
+
+the
+
+generated
+
+unlabepl(eyd|xGd;a✓tGa, <latexitsha1_base64="VpJeWinjRTVHnBayzGv5tNNlcWk=">AAACBHicbZDLSgMxFIYzXmu9jbrsJliEClJmqqDgpqhQlxXsBdoyZNK0Dc1cSM6Iw9iFG1/FjQtF3PoQ7nwb03YW2vpD4OM/53ByfjcUXIFlfRsLi0vLK6uZtez6xubWtrmzW1dBJCmr0UAEsukSxQT3WQ04CNYMJSOeK1jDHV6O6407JhUP/FuIQ9bxSN/nPU4JaMsxc2Ehfrh3KudtGDAgTuUIp3R16Jh5q2hNhOfBTiGPUlUd86vdDWjkMR+oIEq1bCuETkIkcCrYKNuOFAsJHZI+a2n0icdUJ5kcMcIH2uniXiD18wFP3N8TCfGUij1Xd3oEBmq2Njb/q7Ui6J11Eu6HETCfThf1IoEhwONEcJdLRkHEGgiVXP8V0wGRhILOLatDsGdPnod6qWgfF0s3J/nyRRpHBuXQPiogG52iMrpGVVRDFD2iZ/SK3own48V4Nz6mrQtGOrOH/sj4/AFgKpdF</latexit>
+
+✓tDo)
+
+an
+
+auxiliary
+
+class
+
+1).
+
+At
+
+test
+
+time,
+
+the
+
+discriminator
+
+actsp(ays<tKh+e1|cxlla) ssiﬁer. <latexitsha1_base64="Yb54u1FtP91NrdXHOAwM/cj+51Q=">AAAB+XicbVBNS8NAEJ34WetX1KOXYBEqQkmqoAcPRS+Clwr2A9oQNttNu3SzCbubYon5J148KOLVf+LNf+O2zUFbHww83pthZp4fMyqVbX8bS8srq2vrhY3i5tb2zq65t9+UUSIwaeCIRaLtI0kY5aShqGKkHQuCQp+Rlj+8mfitERGSRvxBjWPihqjPaUAxUlryTDMuj9Or7C49zZynR4+deGbJrthTWIvEyUkJctQ986vbi3ASEq4wQ1J2HDtWboqEopiRrNhNJIkRHqI+6WjKUUikm04vz6xjrfSsIBK6uLKm6u+JFIVSjkNfd4ZIDeS8NxH/8zqJCi7dlPI4UYTj2aIgYZaKrEkMVo8KghUba4KwoPpWCw+QQFjpsIo6BGf+5UXSrFacs0r1/rxUu87jKMAhHEEZHLiAGtxCHRqAYQTP8ApvRmq8GO/Gx6x1ychnDuAPjM8fyaqTGw==</latexit>
+
+(K
+
++
+
+train a DNN with propagated learning targets (e.g., pseudo labels) on the unlabeled data. Second, its learning objective can be formulated as a cross-entropy loss or metric learning loss. Notably, while consistency regularization and selftraining are inductive approaches that estimate a learning target per instance, graph-based regularization methods are transductive approaches that propagate learning targets based on a graph constructed on the dataset. Beyond concrete details, however, the three techniques all share the same fundamental idea of seeking for unsupervised targets.
+2.2.4 Deep Generative Models
+Deep generative models are a class of unsupervised learning models that learn to approximate the data distributions without labels [109], [110]. By integrating the generative unsupervised learning concept into a supervised model, a semi-supervised learning framework can be formulated to unify the merits of supervised and unsupervised learning. Two main streams of deep generative models are Variational Auto-Encoders (VAEs) and Generative Adversarial Networks (GANs), as detailed below. See Figure 6 for an illustration of a GAN framework for SSL. Variational auto-encoders (VAEs) are probabilistic models based on variational inference for unsupervised learning of a complex data distribution [109], [111]. A standard VAE model contains a network that encodes an input sample to a latent variable and a network that decodes the latent variable to reconstruct the input; maximizing a variational lower bound. In semi-supervised learning [64], [65], [112], an unsupervised VAE model is generally combined with a supervised classiﬁer. For instance, to predict taskspeciﬁc class information required in SSL, Class-conditional VAE [64] and ADGM [65] introduce the class label as an extra latent variable in the latent feature space to explicitly disentangle the class information (content) and the stochastic information (style), and impose an explicit classiﬁcation loss on the labeled data along with the vanilla VAE loss. Generative adversarial networks (GANs) [110] learn to capture the data distribution by an adversarial minimax game. Speciﬁcally, a generator is trained to generate as realistic images as possible while a discriminator is trained to discriminate between real and generated samples. When re-formulated as a semi-supervised representation learner, GANs can leverage the beneﬁts of both unsupervised generative modeling and supervised discriminative learning [66], [67], [68], [69], [113], [114], [115], [116], [117], [118].
+The generic idea is to augment the standard GAN framework with supervised learning on the labeled real
+
+samples (i.e., discriminative) and unsupervised learning on
+the generated samples. Formally, this enhances the original
+discriminator with an extra supervised learning capability.
+For example, Categorical GAN (CatGAN) [66] introduces a K-class discriminator, and minimizes a supervised cross-
+entropy loss on the real labeled samples, while imposing
+a uniform distribution constraint on the generated samples
+by maximizing the prediction’s entropy. Similarly, feature
+matching GAN (FM-GAN) [67], ALI [68], BadGAN [69] and Localized GAN [70] formulate a (K+1)-class discriminator for SSL, whereby a real labeled sample xl is considered as one of the K classes and a generated sample xG as the (K + 1)th class. The supervised and unsupervised learning objective for the (K+1)-class discriminator is formulated as;
+
+max
+θ
+
+log
+x∈D
+
+p(y|xl, y<K+1),
+
+(8)
+
+max log (1−p(y=K+1|xl)) − log p(y=K+1|xG), (9)
+θ x∈D
+
+where Eq. (8) is the supervised classiﬁcation loss on the labeled samples xl; Eq. (9) is an unsupervised GAN loss that discriminates between the real labeled samples xl and the generated fake samples xG from the image generator. To constrain the generated samples, Localized GAN [70] introduces a regularizer on the generator to ensure the generated samples lie in the neighborhood of an original sample on the manifold, thus allowing to train a locally consistent classiﬁer based on the generated samples in a semi-supervised fashion.
+Remarks. Unlike previously discussed discriminative SSL techniques DGMs can naturally learn from unlabeled data without the need to estimate their labels. In other words, DGMs are native unsupervised representation learners. To enable SSL in DGMs, the key in model reformulation is thus to integrate the label supervision into training, e.g., adding a class label latent variable in VAEs or an extra class discriminator in GANs. Further, one also needs to tackle more difﬁcult model optimization in a GAN framework.
+
+2.2.5 Self-Supervised Learning
+Self-supervised learning is a class of unsupervised representation learners designed based on unsupervised surrogate (pretext) tasks [11], [119], [120], [121], [122], [123]. Selfsupervision differs from self-training algorithms in §2.2.2, as self-supervised learning objectives are task-agnostic and could be trained without any label supervision. The former is originally proposed to learn from only unlabeled data with task-agnostic unsupervised learning objectives, but it is also explored for SSL [12], [71], [72]. In SSL, taskagnostic self-supervision signals on all training data are often integrated with a supervised learning objective on labeled data. For instance, S4L [71] uses self-supervision for SSL based on multiple self-supervision signals such as predicting rotation degree [123] and enforcing invariance to exemplar transformation [119] to train the model along with supervised learning. SimCLR [12] and SimCLRv2 [72] are follow-up works introducing self-supervised contrastive learning for task-agnostic unsupervised pre-training, followed by supervised or semi-supervised ﬁne-tuning with label supervision as the downstream task.
+
+8
+
+Remarks. A unique advantage of self-supervision for SSL is that task-speciﬁc label supervision is not required during training. While the aforementioned semi-supervised learners typically solve a supervised task and an auxiliary unsupervised task jointly, self-supervised semi-supervised learners can be trained in a fully task-agnostic fashion. This suggests the great ﬂexibility of self-supervision for SSL. Thus, the self-supervised training can be introduced as unsupervised pre-training or as an auxiliary unsupervised task solved along with supervised learning. Although selfsupervision is relatively new for SSL, it has been more widely explored for unsupervised learning, which is detailed more extensively in §3.2.1 and §3.2.2.
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+unlabeled sample
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss Lunsup
+<latexit sha1_base64="JL9zGflPs0aTRBpXxc5BzywF5NM=">AAACA3icbVBNS8NAEN3Ur1q/ot70EiyCp5JUQY9FLx48VLAf0ISw2W7bpZtN2J2IJQS8+Fe8eFDEq3/Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QB0kSoJM4y36zaNXsKa5E4BamiAk3f/HL7EUlCKoBwrFTPsWPwUiyBEU6zipsoGmMyxkPa01TgkCovnf6QWcda6VuDSOoSYE3V3xMpDpWahIHuzC9W814u/uf1EhhceCkTcQJUkNmiQcItiKw8EKvPJCXAJ5pgIpm+1SIjLDEBHVtFh+DMv7xI2vWac1qr355VG5dFHGV0iI7QCXLQOWqga9RELUTQI3pGr+jNeDJejHfjY9ZaMoqZffQHxucPsxyY2A==</latexit>
+
+unsupervised pre-training (main task)
+
+xl <latexit sha1_base64="hgDgYhHEJVquJzazbbQDPq+ktTA=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120i7dbMLuRiyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEsG1cd1vZ2V1bX1js7BV3N7Z3dsvHRw2dZwqhg0Wi1i1A6pRcIkNw43AdqKQRoHAVjC6mfqtR1Sax/LBjBP0IzqQPOSMGivdP/VEr1R2K+4MZJl4OSlDjnqv9NXtxyyNUBomqNYdz02Mn1FlOBM4KXZTjQllIzrAjqWSRqj9bHbqhJxapU/CWNmShszU3xMZjbQeR4HtjKgZ6kVvKv7ndVITXvkZl0lqULL5ojAVxMRk+jfpc4XMiLEllClubyVsSBVlxqZTtCF4iy8vk2a14p1XqncX5dp1HkcBjuEEzsCDS6jBLdShAQwG8Ayv8OYI58V5dz7mrStOPnMEf+B8/gBmao3f</latexit>
+labeled sample
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+supervised loss Lsup
+<latexit sha1_base64="q3ICsgq0CN99VyghbiiWSmcDDF8=">AAACAXicbVBNS8NAEN3Ur1q/ol4EL8EieCpJFfRY9OLBQwX7AU0Im+22XbrZhN2JWEK8+Fe8eFDEq//Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QBUpXEWeabVbtmT2EtEqcgVVSg6Ztfbj8iSUgFEI6V6jl2DF6KJTDCaVZxE0VjTMZ4SHuaChxS5aXTDzLrWCt9axBJXQKsqfp7IsWhUpMw0J35vWrey8X/vF4CgwsvZSJOgAoyWzRIuAWRlcdh9ZmkBPhEE0wk07daZIQlJqBDq+gQnPmXF0m7XnNOa/Xbs2rjsoijjA7RETpBDjpHDXSNmqiFCHpEz+gVvRlPxovxbnzMWktGMbOP/sD4/AH7ypfh</latexit>
+
+supervised fine-tuning (downstream task)
+
+Fig. 7: Unsupervised learning trains a generalizable model using purely unlabeled data. The model can later be ﬁnetuned with labeled data and tested on a downstream task.
+
+3 UNSUPERVISED LEARNING (UL)
+Unsupervised Learning (UL) aims to learn representations without utilizing any label supervision. The learned representation is not only expected to capture the underlying semantic information, but also be transferable to tackle unseen downstream tasks such as visual recognition, detection, and segmentation [16], visual retrieval [150], and tracking [151].
+UL is attractive in computer vision for multiple reasons. First, due to costly label annotations, large labeled datasets may not be available in many application scenarios, e.g., medical imaging [152]. Second, as there are often data/label distribution drifts (or gaps) across tasks and application scenarios, pre-training on a large labeled dataset cannot always guarantee good model initialization for unseen situations [153]. Third, UL could supply strong pre-trained models that may perform on par with or even outperform supervised pre-training [12], [16], [154]. Remarks. UL and SSL share the same aim to learn from unlabeled data, and leverage similar modeling principles to formulate unsupervised surrogate supervision signals without any label annotation. However, instead of assuming the availability of task-speciﬁc information (i.e., class labels) as in SSL, UL considers model learning from purely taskagnostic unlabeled data. Given that unlabeled data are abundantly available in different scenarios (e.g., Internet), UL offers an appealing strategy to provide good pre-trained models that could facilitate various downstream tasks.
+Focusing on unsupervised visual learners trained on image classiﬁcation datasets, we deﬁne the UL problem setup in §3.1, and provide a taxonomy and analysis of the existing representative unsupervised deep learning methods in §3.2.
+3.1 The Problem Setting of UL
+Problem Deﬁnition. In UL, we have access to an unlabeled dataset Du = {xi}iN=u1. As label information is unknown, the UL loss function L for training a DNN θ can generally be expressed as Eq. (1), i.e., L = λlLsup + λuLunsup with λl = 0. In discriminative models, the unsupervised objective Lunsup requires certain pseudo/proxy targets to learn semantically meaningful and generalizable representations. In generative models, Lunsup is imposed to explicitly model the data distribution. See Figure 7 for an illustration of UL. Evaluation Protocol. The performance of UL methods are often evaluated via two protocols, commonly known as the (1) linear classiﬁcation protocol, and (2) ﬁne-tuning on
+
+downstream tasks. In (1), the pre-trained DNN is frozen to extract the features for an image dataset, while a linear classiﬁer (e.g., a fully-connected layer or a kNN classiﬁer) is trained to classify the extracted features. In (2), the pretrained DNN is used to initialize a model for any downstream task, followed by ﬁne-tuning with a task-speciﬁc objective, such as ﬁne-tuning an object detector initialized from an unsupervised pre-trained backbone (e.g., FasterRCNN [155]) on object detection datasets (e.g., PASCAL VOC [156]), or ﬁne-tuning a segmentation model (e.g., Mask R-CNN [157]) with a pre-trained backbone on segmentation datasets (e.g., COCO [158]).
+3.2 Taxonomy on UL Algorithms
+Existing unsupervised deep learning models can be mainly grouped into three families: pretext tasks, discriminative models and generative models (Table 2). Pretext tasks and discriminative models are also known as self-supervised learning, which drive model learning by a proxy protocol/task and construct pseudo label supervision to formulate unsupervised surrogate losses. Generative models is inherently unsupervised and explicitly models the data distribution to learn representations without label supervision. We review these models in §3.2.1, §3.2.2 and §3.2.3.
+3.2.1 Pretext Tasks
+Pretext Tasks refer to hand-crafted proxy tasks manually designed to predict certain task-agnostic properties of the input data, which do not require any label supervision for training. By formulating self-supervised learning objectives with free labels, meaningful visual representations can be learned in a fully unsupervised manner. In the following, we review two classes of pretext tasks, which introduce the selfsupervision signals at the pixel-level (illustrated in Figure 8) or instance-level (illustrated in Figure 9). Pixel-level pretext task is generally designed as a dense prediction task that aims to predict the expected pixel values of an output image as a self-supervision signal [124], [125], [126], [127], [128], [129], [130], [131]. Auto-Encoder [124], [125] is one of the most representative and primitive unsupervised models that learn representations by reconstructing input images. In addition to standard reconstruction, pixel-level pretext tasks introduce more advanced image generation tasks to hallucinate the pixel colour values of the
+
+9
+TABLE 2: A taxonomy of unsupervised deep learning methods, including three representative families in §3.2.1 – §3.2.3.
+
+Families of Models Model Rationale
+
+Representative Strategies and Methods
+
+Pretext tasks
+
+Pixel-level Instance-level
+
+reconstruction [124], [125], inpainting [126], MAE [127], denoising [128], colorization [129], [130], [131] predict image rotations [123], scaling and tiling [122], patch ordering [11], patch re-ordering [121]
+
+negative sampling large batch size (SimLR [12]), memory bank (InstDis [132]), queue (MoCo [16])
+
+Instance discrimination input transformation data augmentation (PIRL [133]), multi-view augmentation (CMC [134])
+
+Discriminative models
+
+negative-sample-free simple siamese (SimSiam [135]), Bootstrap (BYOL [136]), DirectPred [137]
+
+Deep clustering
+
+ofﬂine clustering online clustering
+
+DeepCluster [138], JULE [139], SeLa [140] IIC [141], PICA [142], AssociativeCluster [143], SwAV [144]
+
+Deep generative models Discriminator-level Generator-level
+
+DCGAN [145], Self-supervised GAN [146], Transformation GAN [147] BiGAN [148], BigBiGAN [149]
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss
+
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+
+xˆ <latexit sha1_base64="lLjQZgyS4XDPaRRZq5OZ0/x0e6c=">AAAB7XicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGC/YA2lM12067dZMPuRCyh/8GLB0W8+n+8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bRqWa8QZTUul2QA2XIuYNFCh5O9GcRoHkrWB0M/Vbj1wboeJ7HCfcj+ggFqFgFK3U7A4pkqdeqexW3BnIMvFyUoYc9V7pq9tXLI14jExSYzqem6CfUY2CST4pdlPDE8pGdMA7lsY04sbPZtdOyKlV+iRU2laMZKb+nshoZMw4CmxnRHFoFr2p+J/XSTG88jMRJynymM0XhakkqMj0ddIXmjOUY0so08LeStiQasrQBlS0IXiLLy+TZrXinVeqdxfl2nUeRwGO4QTOwINLqMEt1KEBDB7gGV7hzVHOi/PufMxbV5x85gj+wPn8AUJGjus=</latexit>
+
+(a) inpainting
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss
+
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+
+xˆ <latexit sha1_base64="lLjQZgyS4XDPaRRZq5OZ0/x0e6c=">AAAB7XicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGC/YA2lM12067dZMPuRCyh/8GLB0W8+n+8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bRqWa8QZTUul2QA2XIuYNFCh5O9GcRoHkrWB0M/Vbj1wboeJ7HCfcj+ggFqFgFK3U7A4pkqdeqexW3BnIMvFyUoYc9V7pq9tXLI14jExSYzqem6CfUY2CST4pdlPDE8pGdMA7lsY04sbPZtdOyKlV+iRU2laMZKb+nshoZMw4CmxnRHFoFr2p+J/XSTG88jMRJynymM0XhakkqMj0ddIXmjOUY0so08LeStiQasrQBlS0IXiLLy+TZrXinVeqdxfl2nUeRwGO4QTOwINLqMEt1KEBDB7gGV7hzVHOi/PufMxbV5x85gj+wPn8AUJGjus=</latexit>
+
+unlabeled
+
+sample
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+
+rotation
+0 <latexit sha1_base64="2V+LDm2/QwHBtf8AiYUGHYNLbQ0=">AAAB8HicbVDLSgNBEOz1GeMr6tHLYBA8hd0o6DHoxWME85BkDbOT2WTIPJaZWSEs+QovHhTx6ud482+cJHvQxIKGoqqb7q4o4cxY3//2VlbX1jc2C1vF7Z3dvf3SwWHTqFQT2iCKK92OsKGcSdqwzHLaTjTFIuK0FY1upn7riWrDlLy344SGAg8kixnB1kkP/mPWJUyTSa9U9iv+DGiZBDkpQ456r/TV7SuSCiot4diYTuAnNsywtoxwOil2U0MTTEZ4QDuOSiyoCbPZwRN06pQ+ipV2JS2aqb8nMiyMGYvIdQpsh2bRm4r/eZ3UxldhxmSSWirJfFGccmQVmn6P+kxTYvnYEUw0c7ciMsQaE+syKroQgsWXl0mzWgnOK9W7i3LtOo+jAMdwAmcQwCXU4Bbq0AACAp7hFd487b14797HvHXFy2eO4A+8zx+4s5Bb</latexit>
+90 <latexit sha1_base64="1FppH8kZRZhWqUO0KBfXKI/li9A=">AAAB8XicbVDLSgNBEOyNrxhfUY9eBoPgKexGQb0FvXiMYB6YrGF20kmGzM4uM7NCWPIXXjwo4tW/8ebfOEn2oIkFDUVVN91dQSy4Nq777eRWVtfWN/Kbha3tnd294v5BQ0eJYlhnkYhUK6AaBZdYN9wIbMUKaRgIbAajm6nffEKleSTvzThGP6QDyfucUWOlhyv3Me0wrtikWyy5ZXcGsky8jJQgQ61b/Or0IpaEKA0TVOu258bGT6kynAmcFDqJxpiyER1g21JJQ9R+Ort4Qk6s0iP9SNmShszU3xMpDbUeh4HtDKkZ6kVvKv7ntRPTv/RTLuPEoGTzRf1EEBOR6fukxxUyI8aWUKa4vZWwIVWUGRtSwYbgLb68TBqVsndWrtydl6rXWRx5OIJjOAUPLqAKt1CDOjCQ8Ayv8OZo58V5dz7mrTknmzmEP3A+fwA2G5Ce</latexit>
+180 <latexit sha1_base64="FWl74cXFA1qDx/aiodAWj3vSvpM=">AAAB8nicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqYI9FLx4r2FpoY9lsN+3SzSbsToQS+jO8eFDEq7/Gm//GbZuDtj4YeLw3w8y8IJHCoOt+O4W19Y3NreJ2aWd3b/+gfHjUNnGqGW+xWMa6E1DDpVC8hQIl7ySa0yiQ/CEY38z8hyeujYjVPU4S7kd0qEQoGEUrdb26+5j1mNBs2i9X3Ko7B1klXk4qkKPZL3/1BjFLI66QSWpM13MT9DOqUTDJp6VeanhC2ZgOeddSRSNu/Gx+8pScWWVAwljbUkjm6u+JjEbGTKLAdkYUR2bZm4n/ed0Uw7qfCZWkyBVbLApTSTAms//JQGjOUE4soUwLeythI6opQ5tSyYbgLb+8Stq1qndRrd1dVhrXeRxFOIFTOAcPrqABt9CEFjCI4Rle4c1B58V5dz4WrQUnnzmGP3A+fwClspDY</latexit> 270 <latexit sha1_base64="w7Yizljxs4IwOO+2zUKYGwO/z7M=">AAAB8nicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqUI9FLx4r2FpoY9lsN+3SzSbsToQS+jO8eFDEq7/Gm//GbZuDtj4YeLw3w8y8IJHCoOt+O4W19Y3NreJ2aWd3b/+gfHjUNnGqGW+xWMa6E1DDpVC8hQIl7ySa0yiQ/CEY38z8hyeujYjVPU4S7kd0qEQoGEUrdWt19zHrMaHZtF+uuFV3DrJKvJxUIEezX/7qDWKWRlwhk9SYrucm6GdUo2CST0u91PCEsjEd8q6likbc+Nn85Ck5s8qAhLG2pZDM1d8TGY2MmUSB7YwojsyyNxP/87ophld+JlSSIldssShMJcGYzP4nA6E5QzmxhDIt7K2EjaimDG1KJRuCt/zyKmnXqt5FtXZ3WWlc53EU4QRO4Rw8qEMDbqEJLWAQwzO8wpuDzovz7nwsWgtOPnMMf+B8/gCls5DY</latexit>
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss
+
+predict rotation
+{0 , 90 , 180 , 270
+<latexit sha1_base64="+72ne6ikI86JVOx5ieWkdOjVStc=">AAACHnicbVDLSgMxFL3js9bXqEs3wSK4kDJTldZd0Y3LCvYBnbFk0kwbmnmQZIQy9Evc+CtuXCgiuNK/MW0Hqa0HAueecy8393gxZ1JZ1rextLyyurae28hvbm3v7Jp7+w0ZJYLQOol4JFoelpSzkNYVU5y2YkFx4HHa9AbXY7/5QIVkUXinhjF1A9wLmc8IVlrqmBdOiqz71CFMkNEpupzhdmWmKJV/C+SMOmbBKloToEViZ6QAGWod89PpRiQJaKgIx1K2bStWboqFYoTTUd5JJI0xGeAebWsa4oBKN52cN0LHWukiPxL6hQpN1NmJFAdSDgNPdwZY9eW8Nxb/89qJ8ituysI4UTQk00V+wpGK0Dgr1GWCEsWHmmAimP4rIn0sMFE60bwOwZ4/eZE0SkX7rFi6PS9Ur7I4cnAIR3ACNpShCjdQgzoQeIRneIU348l4Md6Nj2nrkpHNHMAfGF8/LxOgrA==</latexit>
+
+}
+
+predict transformation
+
+x <latexit sha1_base64="hL+FaLtOT9luwfLW3Ut08xl3Pcw=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtZICF/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOeHjQA=</latexit>
+
+(b) denoising
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss
+
+d(·, ·)
+<latexit sha1_base64="3BJCv9OJqvDJiV0/2fsl0VERMJU=">AAAB+HicbVDLSsNAFJ3UV62PRl26GSxCBSlJFXRZdOOygn1AG8pkMmmHTjJh5kaopV/ixoUibv0Ud/6N0zQLbT1wuYdz7mXuHD8RXIPjfFuFtfWNza3idmlnd2+/bB8ctrVMFWUtKoVUXZ9oJnjMWsBBsG6iGIl8wTr++Hbudx6Z0lzGDzBJmBeRYcxDTgkYaWCXg2qfBhLOcdbOBnbFqTkZ8Cpxc1JBOZoD+6sfSJpGLAYqiNY910nAmxIFnAo2K/VTzRJCx2TIeobGJGLam2aHz/CpUQIcSmUqBpypvzemJNJ6EvlmMiIw0sveXPzP66UQXntTHicpsJguHgpTgUHieQo44IpREBNDCFXc3IrpiChCwWRVMiG4y19eJe16zb2o1e8vK42bPI4iOkYnqIpcdIUa6A41UQtRlKJn9IrerCfrxXq3PhajBSvfOUJ/YH3+AHoeklI=</latexit>
+
+xˆ <latexit sha1_base64="lLjQZgyS4XDPaRRZq5OZ0/x0e6c=">AAAB7XicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGC/YA2lM12067dZMPuRCyh/8GLB0W8+n+8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bRqWa8QZTUul2QA2XIuYNFCh5O9GcRoHkrWB0M/Vbj1wboeJ7HCfcj+ggFqFgFK3U7A4pkqdeqexW3BnIMvFyUoYc9V7pq9tXLI14jExSYzqem6CfUY2CST4pdlPDE8pGdMA7lsY04sbPZtdOyKlV+iRU2laMZKb+nshoZMw4CmxnRHFoFr2p+J/XSTG88jMRJynymM0XhakkqMj0ddIXmjOUY0so08LeStiQasrQBlS0IXiLLy+TZrXinVeqdxfl2nUeRwGO4QTOwINLqMEt1KEBDB7gGV7hzVHOi/PufMxbV5x85gj+wPn8AUJGjus=</latexit>
+
+color randomization random flipping cropping
+input transformation
+(a) predict rotation & input transformation
+
+(c) colorization
+Fig. 8: In pixel-level pretext tasks (§3.2.1), the aim is to reconstruct the original image xˆ from a corrupted input x.
+
+corrupted input images, as represented by three standard low-level image processing tasks: (1) image inpainting [126], [127] learns by inpainting the masked-out missing regions in the input images, which is also known as masked autoencoders (MAE) [127]; (2) denoising [128] learns to denoise the partial destructed input; and (3) colorization [129], [130], [131] aims to predict the colour values of the grayscale images. These self-supervised models are trained with an image generation task objective (e.g., a mean square error) to enforce predicting the expected pixel values:
+
+min ||Gθ(x) − xˆ||2,
+
+(10)
+
+θ x∈D
+
+where Gθ(·) is an image generation network (typically implemented as an encoder-decoder network architecture) trained to predict the expected output image xˆ per pixel. Once trained, part of the network Gθ(·) (e.g., encoder) can be used to initialize the model weights or extract the intermediate features for solving the downstream task.
+Instance-level pretext tasks introduce sparse semantic labels for each image sample by designing a surrogate proxy task that can be solved per instance without any label annotations [11], [121], [122], [123], [159], [160], [161], [162]. In general, these pretext tasks involve applying different image transformations to generate diverse input variations, whereby an artiﬁcial supervision signal is imposed to pre-
+
+unlabeled
+
+sample
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+
+123
+
+4
+
+5
+
+678
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+input patches
+(b) predict patch ordering
+
+unsupervised loss
+patch order
+
+Fig. 9: In instance-level pretext tasks (§3.2.1) the aim is to predict the transformation on the input.
+
+dict the applied transformation on each image instance. Among this line of works, the representative ones consider mainly two classes of instance-wise transformations on input images. The ﬁrst one is classifying global transformations, such as rotations [123], scaling and tiling [122], where the learning objective is to recognize the geometric transformation applied on an image. The second one is predicting local transformations, such as patch orderings [11] and patch re-orderings [121], [159], [161], which cut each image into multiple local patches. The goal of patch orderings is to recognize the order of a given cut-out patch, while patch re-orderings, also known as the jigsaw puzzles, permute the cut-out patches randomly and the goal is to predict the permuted conﬁgurations. In summary, the objective of an instance-level pretext task can be written as:
+
+min
+θ
+
+Lunsup(Φz(x), z, θ),
+x∈D
+
+(11)
+
+where Lunsup(·) can be various loss functions (e.g., crossentropy loss [123]) that learn a mapping from a transformed input image Φz(x) to a discrete category or a conﬁguration
+
+10
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+unlabeled sample
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+feature
+
+f✓ (xu ) <latexit sha1_base64="FGQoZ0eVaV7BPQHJwJ4eMTrG9l8=">AAAB+HicbVDLSgNBEJyNrxgfWfXoZTAI8RJ2o6DHoBePEcwDkmWZncwmQ2YfzPSIccmXePGgiFc/xZt/4yTZgyYWNBRV3XR3BangChzn2yqsrW9sbhW3Szu7e/tl++CwrRItKWvRRCSyGxDFBI9ZCzgI1k0lI1EgWCcY38z8zgOTiifxPUxS5kVkGPOQUwJG8u1y6Gd9GDEg0+qjr898u+LUnDnwKnFzUkE5mr791R8kVEcsBiqIUj3XScHLiAROBZuW+lqxlNAxGbKeoTGJmPKy+eFTfGqUAQ4TaSoGPFd/T2QkUmoSBaYzIjBSy95M/M/raQivvIzHqQYW08WiUAsMCZ6lgAdcMgpiYgihkptbMR0RSSiYrEomBHf55VXSrtfc81r97qLSuM7jKKJjdIKqyEWXqIFuURO1EEUaPaNX9GY9WS/Wu/WxaC1Y+cwR+gPr8wei9JMR</latexit>
+
+positive pair
+
+exp(sim( , ))
+
+− log(
+
+)
+
+exp(sim( , )) + exp(sim( , )) + ⋯ + exp(sim( , ))
+
+positive pair negative pair
+
+negative pair
+
+unsupervised loss: contrastive loss (infoNCE)
+
+Fig. 10: The unsupervised discriminative model using contrastive learning (§3.2.2) aims to pull together the positive pairs and push away the negative ones.
+
+of the applied transformation z. Once trained, the representations are covariant with the transformations Φz(·), thus being aware of the spatial context information, e.g., how an image is rotated or how the local patches are permuted. Remarks. Although self-supervised learning objectives of pixel-level or instance-level pretext tasks are generally not explicitly related to the downstream task objectives (e.g., image classiﬁcation, detection and segmentation), they permit to learn from unlabeled data by predicting the spatial context or structured correlation in images, such as inpainting missing regions, and predicting the applied rotations. As these self-supervision signals can implicitly uncover the semantic content (e.g. human interpretable concepts [163]) or spatial context in images, they often yield a meaningful pre-trained model for initialization in unseen downstream tasks, or even serve as a ﬂexible and effective regularizer to facilitate other machine learning setups, such as semisupervised learning [71] and domain generalization [164].
+3.2.2 Discriminative Models
+Discriminative models hereby refer to the class of unsupervised discriminative models that learn visual representations from the unlabeled data by enforcing invariance towards various task-irrelevant visual variations at either instance-level, neighbor-level or group-level. These visual variations can be intra-instance variations such as different views of the same instance [134], [165], [166], [167], [168], or inter-instance variations between neighbor instances [169], [170] or across a group of instances [138], [144], [171].
+In the following, we review two representative classes of unsupervised discriminative models that offer the state of the art in unsupervised visual feature learning, including instance discrimination (see Figure 10) and deep clustering (see Figure 11). The former imposes self-supervision per instance by treating each instance as a class, while the latter introduces supervision per group by considering a group of similar instances as a class. Instance discrimination models learn discriminative representations by enforcing invariance towards different viewing conditions, data augmentations or various parts of the same image instance [12], [16], [72], [119], [120], [132], [133], [134], [165], [166], [167], [168], [172], [173], [174] – also known as exemplar learning [119], [120].
+
+The most prevalent scheme in instance discrimination is contrastive learning, which was initially proposed to learn invariant representations by mapping similar inputs to nearby points in the latent space [105], [106]. The stateof-the-art contrastive learning models for self-supervised learning generally aim to obtain an invariance property by optimizing a contrastive loss formulated upon the noise contrastive estimation (NCE) principle [175], which maximizes the mutual information across different views. The multi-view information bottleneck model [176] extends the original information bottleneck principle to unsupervised learning and trains an encoder to retain all the relevant information for predicting the label while minimizing the excess information in the representation. Formally, contrastive learners such as SimLR [12] and MoCo [16] are generally optimized by an instance-wise contrastive loss (i.e., infoNCE loss) [106], [177]:
+
+min
+
+−log
+
+θ xi∈D
+
+exp(fθ(xi) · fθ
+
+M j=1
+
+exp(fθ
+
+(xi
+
+)
+
+(x+i )/τ ) · fθ(xj)/τ
+
+)
+
+,
+
+(12)
+
+where τ is a temperature, fθ is the feature encoder, i.e., a DNN; fθ(xi), fθ(x+i ) are the feature embeddings of two different augmentations, or views of the same image; {xj}M j=1 includes (M −1) negative samples and 1 positive (i.e., x+i ) sample. Eq. (12) optimizes the network by enforcing the positive pairs (i.e., embeddings of the same instance) to lie closer, while pushing apart the negative pairs (i.e., embeddings of different instances). Minimizing the InfoNCE loss is equivalent to maximizing a lower bound on the mutual information between fθ(xi) and fθ(x+i ) [165].
+To derive a tractable yet meaningful contrastive distribution in Eq. (12), a large amount of negative pairs are often required per training batch. To this aim, existing state-of-theart methods are typically featured with different negative sampling strategies to collect more negative pairs. For instance, a large batch size of 4096 is adopted in SimCLR [12]. In InstDis [132], MoCo [16], PIRL [133], and CMC [134], a memory bank is used to maintain all the instance prototypes by keeping moving average of their feature representations over training iterations. Finally, running queue enqueues the features of samples in the latest batches and dequeues the old mini-batches of samples to store a fraction of sample’s features from the preceding mini-batches [16], [133], [174].
+Inspired by deep metric learning, various training strategies further boost contrastive learning. For instance, a hard negative sampling strategy [178] mines the negative pairs that are similar to the samples but likely belong to different classes. To train negative pairs and (or) positive pairs by adversarial training [179], [180] learn a set of “adversarial negatives” confused with the given samples, or “cooperative positives” similar to the given samples. These strategies are designed to ﬁnd the better negative and positive pairs for improving contrastive learning.
+In addition to negative sampling, it is essential to apply various image transformations for generating multiple diverse variants (i.e., views) of the same instance to construct the positive pairs. The most typical way is to apply common data augmentation such as random cropping and color jittering [12], [16], [132], [133], [166], [173], or pretext transformation [133] like patch re-ordering [121] and rotation [123].
+
+11
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+unlabeled sample
+
+model
+✓ <latexit sha1_base64="VRbFNfU2yJrhxTioHNG9u2eQ22g=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVg9HHGm/XHGr7hxklXg5qUCORr/81RvELI24QiapMV3PTdDPqEbBJJ+WeqnhCWVjOuRdSxWNuPGz+bVTcmaVAQljbUshmau/JzIaGTOJAtsZURyZZW8m/ud1Uwyv/UyoJEWu2GJRmEqCMZm9TgZCc4ZyYgllWthbCRtRTRnagEo2BG/55VXSqlW9i2rt/rJSv8njKMIJnMI5eHAFdbiDBjSBwSM8wyu8ObHz4rw7H4vWgpPPHMMfOJ8/pUWPLA==</latexit>
+
+unsupervised loss
+
+p(y|xu; ✓)
+<latexit sha1_base64="vaF2BancqNKJtIYsQ2C1/GH+3Nw=">AAAB+HicbVDLSsNAFJ3UV62PRl26CRahbkpSBQU3RTcuK9gHtCFMppN26OTBzB0xxn6JGxeKuPVT3Pk3TtsstPXAhcM593LvPX7CmQTb/jYKK6tr6xvFzdLW9s5u2dzbb8tYCUJbJOax6PpYUs4i2gIGnHYTQXHoc9rxx9dTv3NPhWRxdAdpQt0QDyMWMIJBS55ZTqrp04OnLvswooBPPLNi1+wZrGXi5KSCcjQ986s/iIkKaQSEYyl7jp2Am2EBjHA6KfWVpAkmYzykPU0jHFLpZrPDJ9axVgZWEAtdEVgz9fdEhkMp09DXnSGGkVz0puJ/Xk9BcOFmLEoU0IjMFwWKWxBb0xSsAROUAE81wUQwfatFRlhgAjqrkg7BWXx5mbTrNee0Vr89qzSu8jiK6BAdoSpy0DlqoBvURC1EkELP6BW9GY/Gi/FufMxbC0Y+c4D+wPj8AXVjkvQ=</latexit>
+
+Lunsup <latexit sha1_base64="JL9zGflPs0aTRBpXxc5BzywF5NM=">AAACA3icbVBNS8NAEN3Ur1q/ot70EiyCp5JUQY9FLx48VLAf0ISw2W7bpZtN2J2IJQS8+Fe8eFDEq3/Cm//GTZuDtj4YeLw3w8y8IOZMgW1/G6Wl5ZXVtfJ6ZWNza3vH3N1rqyiRhLZIxCPZDbCinAnaAgacdmNJcRhw2gnGV7nfuadSsUjcwSSmXoiHgg0YwaAl3zxwQwwjgnl6k/mpC/QB0kSoJM4y36zaNXsKa5E4BamiAk3f/HL7EUlCKoBwrFTPsWPwUiyBEU6zipsoGmMyxkPa01TgkCovnf6QWcda6VuDSOoSYE3V3xMpDpWahIHuzC9W814u/uf1EhhceCkTcQJUkNmiQcItiKw8EKvPJCXAJ5pgIpm+1SIjLDEBHVtFh+DMv7xI2vWac1qr355VG5dFHGV0iI7QCXLQOWqga9RELUTQI3pGr+jNeDJejHfjY9ZaMoqZffQHxucPsxyY2A==</latexit>
+
+yˆ <latexit sha1_base64="GxtXk0tCruLmLOYFmSoFupowqyY=">AAAB7XicbVBNS8NAEJ3Ur1q/qh69LBbBU0mqoMeiF48V7Ae0oWy2m3btZhN2J0IJ/Q9ePCji1f/jzX/jts1BWx8MPN6bYWZekEhh0HW/ncLa+sbmVnG7tLO7t39QPjxqmTjVjDdZLGPdCajhUijeRIGSdxLNaRRI3g7GtzO//cS1EbF6wEnC/YgOlQgFo2ilVm9EkUz65Ypbdecgq8TLSQVyNPrlr94gZmnEFTJJjel6boJ+RjUKJvm01EsNTygb0yHvWqpoxI2fza+dkjOrDEgYa1sKyVz9PZHRyJhJFNjOiOLILHsz8T+vm2J47WdCJSlyxRaLwlQSjMnsdTIQmjOUE0so08LeStiIasrQBlSyIXjLL6+SVq3qXVRr95eV+k0eRxFO4BTOwYMrqMMdNKAJDB7hGV7hzYmdF+fd+Vi0Fpx85hj+wPn8AUPKjuw=</latexit>
+
+cluster membership (pseudo label)
+
+feature f✓(xu) <latexit sha1_base64="FGQoZ0eVaV7BPQHJwJ4eMTrG9l8=">AAAB+HicbVDLSgNBEJyNrxgfWfXoZTAI8RJ2o6DHoBePEcwDkmWZncwmQ2YfzPSIccmXePGgiFc/xZt/4yTZgyYWNBRV3XR3BangChzn2yqsrW9sbhW3Szu7e/tl++CwrRItKWvRRCSyGxDFBI9ZCzgI1k0lI1EgWCcY38z8zgOTiifxPUxS5kVkGPOQUwJG8u1y6Gd9GDEg0+qjr898u+LUnDnwKnFzUkE5mr791R8kVEcsBiqIUj3XScHLiAROBZuW+lqxlNAxGbKeoTGJmPKy+eFTfGqUAQ4TaSoGPFd/T2QkUmoSBaYzIjBSy95M/M/raQivvIzHqQYW08WiUAsMCZ6lgAdcMgpiYgihkptbMR0RSSiYrEomBHf55VXSrtfc81r97qLSuM7jKKJjdIKqyEWXqIFuURO1EEUaPaNX9GY9WS/Wu/WxaC1Y+cwR+gPr8wei9JMR</latexit>
+
+clustering
+Fig. 11: In unsupervised discriminative models using deep clustering (§3.2.2), unlabeled samples are assigned to a set of clusters by online or ofﬂine clustering, while the cluster memberships are utilized as pseudo labels for training.
+An alternative way is to artiﬁcially construct multiple views of a single image by using different image channels like luminance and chrominance [134], or by extracting the local and global patches of the same image [165]. In a nutshell, although there are different strategies in negative sampling and image transformations to construct the negative and positive pairs for contrastive learning, these strategies share the same aim to learn visual representations invariant to diverse input transformations [133], [172].
+While contrastive learning approaches rely on obtaining a sufﬁcient amount of negative pairs to derive the contrastive loss (Eq. (12)), another alternative non-contrastive scheme for instance discrimintation operates in a negativesample-free manner [135], [136], [137], [181], as exempliﬁed by bootstrap (BYOL) [136] and simple siamese networks (SimSiam) [135]). In particular, in BYOL and SimSiam, two views (obtained from data augmentation) of the same images are passed towards the networks and the mean squared error is minimized between the representations of two views to enforce invariances. Importantly, a stop gradient scheme is adopted to prevent representational collapse, i.e. avoid mapping all the samples to the same representations. Another related method is Barlow Twins [181], which computes a cross-correlation matrix between the distorted versions of a batch of training samples and enforce the matrix to be an identity matrix, thus learning self-supervised representations invariant to different distortions. Although these noncontrastive methods adopt other loss formulations, they all share the similar spirit as contrastive learning given that meaningful representations are learned by enforcing invariances to different views of the same instance.
+Deep clustering models learn discriminative representations by grouping similar instances from the same cluster together [138], [139], [140], [142], [144], [170], [171], [182], [183], [184], [185], [186], [187]. In training, the entire dataset is generally divided into groups by associating each instance to a certain cluster centroid based on pairwise similarities. Although clustering algorithms are longstanding machine learning techniques [188], [189], [190], they have been redesigned to be seamlessly integrated with DNNs to learn discriminative representations without label supervision. Conceptually, the cluster memberships can be considered as some pseudo labels to supervise the model training, as
+
+written in Eq. (13).
+
+min
+θ
+
+Lunsup(x, yˆ, θ),
+x∈D
+
+(13)
+
+where yˆ is the cluster membership of sample x, Lunsup(·, ·, θ) is the loss function that constrains the mapping from x to y, such as a classiﬁcation loss. Deep clustering algorithms can be further grouped into two categories according to whether the assignments of cluster memberships are derived in an ofﬂine or online manner, as detailed in the following.
+In ofﬂine clustering, unsupervised training is alternated between a cluster assignment step and a network training step [139], [140], [170], [171], [182], [191], [192], [193]. While the former step estimates the cluster memberships of all the training samples, the latter uses the assigned cluster memberships as pseudo labels to train the network. Representative ofﬂine clustering models include DeepCluster [138], JULE [139] and SeLa [140], which mainly differ in the clustering algorithms. Speciﬁcally, DeepCluster [138], [171] groups visual features using k-means clustering [189]. JULE [139] uses agglomerative clustering [194] that merges similar clusters to iteratively derive new cluster memberships. SeLa [140] casts clustering as an optimal transport problem solved by Sinkhorn-Knopp algorithm [195] to obtain the cluster memberships as pseudo labels.
+In online clustering, the cluster assignment step and network training step are coupled in an end-to-end training framework, as represented by IIC [141], AssociativeCluster [143], PICA [142], and SwAV [144]. Compared to ofﬂine clustering, online clustering could better scale to largescale datasets, as it does not require clustering the entire dataset iteratively. This is typically achieved in two ways: (1) training a classiﬁer that parameterizes the cluster memberships (e.g., IIC and PICA); (2) learning a set of cluster centroids/prototypes (e.g., AssociativeCluster and SwAV). For instance, IIC [141] learns the cluster memberships by maximizing the mutual information between predictions of an original instance and a randomly perturbed instance obtained from data augmentation. SwAV [144] learns a set of prototypes (i.e., cluster centroids) in the feature space and assigns each sample to the closest prototype.
+
+Remarks. Recent advances of discriminative unsupervised models include both contrastive learning and deep clustering, which have set the new state of the art. On one side, contrastive learning discriminates individual instances by imposing transformation invariance at the instance-level. Interestingly, this opposes some instance-level pretext tasks that instead learn by predicting the applied transformations. Contrastive learning also closely relates to consistency regularization in SSL in the sense of enforcing invariance to transformations, although different loss functions are often used. However, as shown in [135], a pairwise loss objective – often used for consistency regularization in SSL – can be also effective as contrastive loss (Eq. (12)). This suggests that the essential idea behind them is identical – imposing transformation invariance at instance level. Deep clustering, on the other hand, discriminates between groups of instances for discovering the underlying semantic boundaries, and enforces group-level invariance. The idea of consistency regularization is also adopted by several deep clustering methods [141], [142], conforming its more generic efﬁcacy
+
+z <latexit sha1_base64="VLEo6VgUnu2TnOxoOkqsMPXvyTo=">AAAB6HicbVDLTgJBEOzFF+IL9ehlIjHxRHbRRI9ELx4hkUcCGzI79MLI7OxmZtYECV/gxYPGePWTvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCoqeNUMWywWMSqHVCNgktsGG4EthOFNAoEtoLR7cxvPaLSPJb3ZpygH9GB5CFn1Fip/tQrltyyOwdZJV5GSpCh1it+dfsxSyOUhgmqdcdzE+NPqDKcCZwWuqnGhLIRHWDHUkkj1P5kfuiUnFmlT8JY2ZKGzNXfExMaaT2OAtsZUTPUy95M/M/rpCa89idcJqlByRaLwlQQE5PZ16TPFTIjxpZQpri9lbAhVZQZm03BhuAtv7xKmpWyd1Gu1C9L1ZssjjycwCmcgwdXUIU7qEEDGCA8wyu8OQ/Oi/PufCxac042cwx/4Hz+AOqPjQI=</latexit>
+noise
+
+generator
+✓G <latexit sha1_base64="v65/jXUKQUWzOLfMQdcfIdjMAC4=">AAAB73icbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj0oMcK9gPaUDbbTbt0s4m7E6GE/gkvHhTx6t/x5r9x2+agrQ8GHu/NMDMvSKQw6Lrfzsrq2vrGZmGruL2zu7dfOjhsmjjVjDdYLGPdDqjhUijeQIGStxPNaRRI3gpGN1O/9cS1EbF6wHHC/YgOlAgFo2ildheHHGnvtlcquxV3BrJMvJyUIUe9V/rq9mOWRlwhk9SYjucm6GdUo2CST4rd1PCEshEd8I6likbc+Nns3gk5tUqfhLG2pZDM1N8TGY2MGUeB7YwoDs2iNxX/8zophld+JlSSIldsvihMJcGYTJ8nfaE5Qzm2hDIt7K2EDammDG1ERRuCt/jyMmlWK955pXp/Ua5d53EU4BhO4Aw8uIQa3EEdGsBAwjO8wpvz6Lw4787HvHXFyWeO4A+czx/wDY/m</latexit>
+
+xG <latexit sha1_base64="b1TAZKXqUEa8t54y6fGRvY2LH8E=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoPgKexGQY9BD3qMaB6QLGF2MkmGzM4uM71iWPIJXjwo4tUv8ubfOEn2oIkFDUVVN91dQSyFQdf9dnIrq2vrG/nNwtb2zu5ecf+gYaJEM15nkYx0K6CGS6F4HQVK3oo1p2EgeTMYXU/95iPXRkTqAccx90M6UKIvGEUr3T91b7rFklt2ZyDLxMtICTLUusWvTi9iScgVMkmNaXtujH5KNQom+aTQSQyPKRvRAW9bqmjIjZ/OTp2QE6v0SD/SthSSmfp7IqWhMeMwsJ0hxaFZ9Kbif147wf6lnwoVJ8gVmy/qJ5JgRKZ/k57QnKEcW0KZFvZWwoZUU4Y2nYINwVt8eZk0KmXvrFy5Oy9Vr7I48nAEx3AKHlxAFW6hBnVgMIBneIU3RzovzrvzMW/NOdnMIfyB8/kDLlaNug==</latexit>
+
+(fake)
+
+generated sample
+
+discriminator
+✓D <latexit sha1_base64="aR/yzCvQTkw+G1bkPJWxzYcYyAY=">AAAB73icbVBNS8NAEJ34WetX1aOXxSJ4KkkV9FjUg8cK9gPaUDbbTbt0s4m7E6GE/gkvHhTx6t/x5r9x2+agrQ8GHu/NMDMvSKQw6Lrfzsrq2vrGZmGruL2zu7dfOjhsmjjVjDdYLGPdDqjhUijeQIGStxPNaRRI3gpGN1O/9cS1EbF6wHHC/YgOlAgFo2ildheHHGnvtlcquxV3BrJMvJyUIUe9V/rq9mOWRlwhk9SYjucm6GdUo2CST4rd1PCEshEd8I6likbc+Nns3gk5tUqfhLG2pZDM1N8TGY2MGUeB7YwoDs2iNxX/8zophld+JlSSIldsvihMJcGYTJ8nfaE5Qzm2hDIt7K2EDammDG1ERRuCt/jyMmlWK955pXp/Ua5d53EU4BhO4Aw8uIQa3EEdGsBAwjO8wpvz6Lw4787HvHXFyWeO4A+czx/rgY/j</latexit>
+
+xu <latexit sha1_base64="NVGUAIfCP10vxvy4bP+QPTROTFU=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KkkV9Fj04rGi/YA2lM120y7dbMLuRCyhP8GLB0W8+ou8+W/ctjlo64OBx3szzMwLEikMuu63s7K6tr6xWdgqbu/s7u2XDg6bJk414w0Wy1i3A2q4FIo3UKDk7URzGgWSt4LRzdRvPXJtRKwecJxwP6IDJULBKFrp/qmX9kplt+LOQJaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzySbGbGp5QNqID3rFU0YgbP5udOiGnVumTMNa2FJKZ+nsio5Ex4yiwnRHFoVn0puJ/XifF8MrPhEpS5IrNF4WpJBiT6d+kLzRnKMeWUKaFvZWwIdWUoU2naEPwFl9eJs1qxTuvVO8uyrXrPI4CHMMJnIEHl1CDW6hDAxgM4Ble4c2Rzovz7nzMW1ecfOYI/sD5/AF0Do3o</latexit>
+
+(real)
+
+unlabeled sample
+
+real fake
+unsupervised loss (minimax loss)
+
+Fig. 12: In GANs (§3.2.3), a generator and a discriminator are trained with a minimax game (Eq. (14)) in an unsupervised manner, whilst their intermediate features lead to discriminative visual representations.
+
+12
+learning (a) local smoothness
+learning
+
+beyond SSL. Lastly, discriminative unsupervised learning can also be conducted at both instance-level and group-level to learn more powerful representations [186], [196].
+
+3.2.3 Deep Generative Models
+
+Deep generative models (DGMs), as introduced in §2.2.4, are inherent unsupervised learners that explicitly model the data distribution [109], [110], [197], [198]. DGMs are applicable for both semi-supervised and unsupervised learning. A typical Generative Adversarial Network (GAN) [66], [146], [147], [149], [199] contains a discriminator D to differentiate real and fake samples, and a generator G that can serve as an image encoder to capture the semantics in latent space, as trained by a min-max game:
+
+min
+G
+
+max
+D
+
+Ex∼pdata (x) [logD(x)]+Ez∼pz (z) [log(1−D(G(z )))],
+
+(14)
+
+where z is sampled from an input noise distribution pz(z). GANs can learn representations at both the discriminator and the generator level. See Figure 12 for an illustration of deep generative model based on a GAN.
+To learn representations at the discriminator-level, Deep Convolutional Generative Adversarial Network (DCGAN) [145] adopts a pre-trained convolutional discriminator to extract features for tackling a downstream image classiﬁcation task. Later on, Self-supervised GAN [146] and Transformation GAN [147] further imbue the discriminator with a self-supervised pretext task to predict the applied image transformation, thus enabling the representations to capture the latent visual structures.
+To learn representations at the generator-level, Bidirectional Generative Adversarial Networks (BiGAN) [199] introduces an image encoder coupled with the generator, which is trained with a joint discriminator loss to tie the data distribution and the latent feature distribution together. This allows the image encoder to capture the semantic variations in its latent representation, and offer discriminative visual representations for one nearest neighbor (1NN) classiﬁcation. To further improve BiGAN, BigBiGAN [149] adopts more powerful discriminator and generator architectures than BigGAN [148], together with an additional unary discriminator loss to constrain the data or latent distribution independently, therefore enabling more expressive unsupervised representation learning at the generator-level.
+Remarks. Although most state-of-the-art UL methods are self-supervised models that solve pretext tasks or perform unsupervised discriminative learning (as reviewed in §3.2.1 and §3.2.2), deep generative models are still an important
+
+(b) global smoothness
+Fig. 13: SSL and UL share (a) local and (b) global smoothness assumptions. Unlabeled samples (grey dots) are assigned to class labels depending on the decision boundaries derived from the local or global smoothness assumptions.
+
+class of unsupervised learners owing to their native unsupervised nature to learn expressive data representations in a probabilistic manner. Further, they do not require manual design of a meaningful discriminative learning objective, while offering a unique ability to generate abundant data.
+
+4 DISCUSSION ON SSL AND UL
+In this section, we connect SSL and UL via further discussion on their common learning assumptions (§4.1), and their applications in different computer vision tasks (§4.2).
+
+4.1 The learning assumptions shared by SSL and UL
+As discussed in §2.1, the unsupervised learning objectives in SSL are often formulated based on the smoothness assumption [42]. Broadly speaking, the learning assumptions of various discriminative SSL and UL algorithms can be grouped into two types of smoothness assumptions, i.e. local smoothness and global smoothness – as visually illustrated in Figure 13. In the following, we further elaborate these assumptions and discuss the different SSL and UL algorithms that are built upon these assumptions.
+
+4.1.1 Local Smoothness
+There are two ﬂavors of local smoothness assumption. First, a sample xi is assumed to share the same class label as its transformed variant xˆi (Eq. (15)). Second, a sample xi is assumed to belong to the same class as its nearby sample xj in the latent representation space (Eq. (16)). An unsupervised loss term enforces local smoothness on an unlabeled sample xi via:
+
+min
+θ
+
+Lunsup(f (xi), f (xˆi))
+xi ∈D
+
+(15)
+
+min
+θ
+
+Lunsup(f (xi), f (xj ))
+xi ∈D
+
+(16)
+
+where f (·) is the model to be trained and gives the model output (such as features or predictions). Lunsup(·) could be any similarity metric that quantiﬁes the divergence or
+
+inconsistency between two model outputs, such as a mean square error, or contrastive loss.
+Local smoothness among different views of the same sample (Eq. (15)) can be achieved via the consistency regularization techniques in SSL (§2.2.1, Figure 3). They enforce predictive smoothness to the same samples under different variations imposed at the input space and (or) model space, given that the different transformed versions of the same sample should lie in its own local neighborhood. Similarly, the instance discrimination algorithms in UL also implicitly enforce the same samples under different views or transformations to have locally consistent representations, as represented by contrastive learning which encourages local invariances on each sample (§3.2.2, Figure 10).
+Local smoothness among the nearby samples (Eq. (16)) can be imposed via the graph-based regularization techniques in SSL. They often propagate the class labels to the unlabeled samples using the labels of their neighbours on the graph, as the nearby samples should likely share the same class (§2.2.3, Figure 5). Similarly, neighbourhood consistency is also explored in UL [169], [170], which forms the semantic training labels by mining the nearest neighbors of each sample based on feature similarity, given that nearest neighbors are likely to belong to the same semantic class.
+
+4.1.2 Global Smoothness
+The global smoothness assumption indicates that a sample xi could be assigned to a certain class (or target) zi based on the underlying global structures captured by the model:
+
+min
+θ
+
+Lunsup(f (xi), zi)
+xi ∈D
+
+(17)
+
+where zi is the learning target (e.g. the cluster membership or the most conﬁdent predicted class), which is derived
+
+from the global class decision boundaries discovered during
+
+training (Figure 13) whilst the decision boundaries are sup-
+
+posed to lie in low density regions. Similar to Eq. (15) and Eq. (16), Lunsup(·) is a similarity metric that quantiﬁes the inconsistency between the model output and the training
+
+target, such as a cross-entropy loss. The global smoothness
+
+assumption is also widely adopted in various SSL and UL
+
+techniques to learn from the unlabeled samples with pseudo
+
+learning targets, as detailed in the following.
+
+The self-training techniques in SSL (§2.2.2, Figure 4) are
+
+generally formulated based on global smoothness, as the
+
+learning targets for unlabeled data are derived based on
+
+the class decision boundaries discovered by the models. For
+
+instance, in entropy minimization (Eq. (4), Figure 4 (a)), the
+
+pseudo label is obtained as the class predicted with the high-
+
+est conﬁdence. In co-training and distillation (Eq. (5), Eq. (6),
+
+Figure 4 (b)(c)), the learning targets come from the model co-
+
+trained in parallel or pre-trained beforehand. Similarly, the
+
+deep clustering algorithms in UL (§3.2.2, Figure 11) are also
+
+proposed upon global smoothness, given that the cluster
+
+memberships for unlabeled samples are acquired from an
+
+online or ofﬂine clustering algorithm which uncovers the
+
+latent class decision boundaries in the feature space.
+
+4.1.3 Connections between SSL and UL
+The learning rationales common in SSL and UL. As analyzed in §4.1.1 and §4.1.2, most SSL and UL algorithms
+
+13
+TABLE 3: A common taxonomy on SSL and UL methods based on their learning assumptions.
+
+Assumption
+
+Objective Corresponding SSL & UL methods
+
+local smoothness
+
+Eq. (15) consistency regularization in SSL (§2.2.1) instance discrimination in UL (§3.2.2)
+Eq. (16) graph-based regularization in SSL (§2.2.3) neighbourhood consistency in UL (§3.2.2)
+
+global smoothness Eq. (17) self-training in SSL (§2.2.2) deep clustering in UL (§3.2.2)
+
+are formulated based on the same local smoothness or global smoothness assumption – as summarized in Table 3. A common aspect of these SSL and UL algorithms is to design visual learning objectives that enforce invariance or equivariance towards different transformations applied on the input data, as represented by consistency regularization in SSL (§2.2.1) and instance discrimination in UL (§3.2.2). Typical transformation strategies can range from simple data augmentation [37], [39], [46], to more complex transformations such as adversarial perturbations [48], [49], [74], [81], rotations [123] and patch reordering [121], autoencoding transformations [200], [201] and automated augmentation [27], [38], [51]. On one side, most of these SSL and UL methods hinge on learning representations invariant to data augmentation and perturbations by assigning the same underlying labels to the augmented and perturbed data samples. On the other side, other SSL and UL methods consider learning representations that are equivalent to different transformations such as rotations and patch reordering by learning to predict the type of transformations.
+Many state-of-the-art SSL and UL methods can be well related with the same underlying learning assumptions, given that they introduce similar objectives to learn from the unlabeled samples. In essence, the learning rationales of these SSL and UL methods could be broadly categorized as: (1) impose the consistency among different transformed versions of the same sample (Eq. (15)), (2) enforce the smoothness between a sample and its neighbouring one (Eq. (16)), and (3) derive learning targets for the unlabeled samples based on global decision boundaries (Eq. (17)).
+The similarities and differences between problem setups. In the problems setups, SSL and UL are similar in the sense that both labeled and unlabeled data are often involved in their training protocols before evaluating their generalized model performance on the test set. In particular, the SSL paradigm adopts one-stage training and uses both labeled and unlabeled data during training (Figure 2); while most existing UL protocols consider two-stage training (Figure 7) – one stage for pre-training with unlabeled data and another stage for ﬁne-tuning with labeled data on a downstream task.
+In brief, when it comes to training protocols, UL differs from SSL in several ways: (1) the labeled data and unlabeled data are not given together at once; (2) unlabeled and labeled datasets may have different distributions. These properties make UL a more generic learning paradigm to leverage different unlabeled datasets. Nevertheless, how unsupervised pre-training upon different forms of unlabeled data beneﬁts the model generalization on speciﬁc downstream tasks remains an open research question. For
+
+14
+
+instance, it remains unclear how an unsupervised model pre-trained on natural colour images could generalize to a downstream task that has a different data distribution such as grayscale images in medical imaging. In this regard, SSL provides a more reliable learning paradigm to utilize the unlabeled data, given that the label set offers the prior knowledge for the models and (or) the model designers to select the useful set of unlabeled samples that are similar to the labeled data distribution.
+4.2 Applied SSL and UL in Visual Recognition
+In §2 and §3, we mainly present the SSL and UL methods for standard image classiﬁcation. However, their underlying learning rationales can be generalized to other challenging computer vision tasks, e.g., semantic segmentation [32], [202], object detection [30], [203], unsupervised domain adaptation [204], [205], pose estimation [34], [206], 3D scene understanding [207], video recognition [150], [208], etc. In the following, we review three core visual recognition tasks that widely beneﬁt from SSL and UL methods to exploit unlabeled data: semantic segmentation (§4.2.1), object detection (§4.2.2), and unsupervised domain adaptation (§4.2.3).
+4.2.1 Semantic Segmentation
+Semantic segmentation aims to assign a semantic class label for each pixel in an input image. It is a core computer vision task that could be beneﬁcial to various real-world applications such as medical image analysis [209], [210], [211], [212] and autonomous driving [213], [214], [215]. Supervised semantic segmentation requires tedious and expensive pixelwise label annotations, e.g. manually annotating one single natural image in Cityscapes needs 1.5 hours [213].
+To reduce the annotation costs in semantic segmentation, a group of works consider only a small set of the training data annotated with per-pixel semantic labels while the rest of the training data being unlabeled – known as semisupervised semantic segmentation. These works generally inherit similar learning rationales as SSL or UL for image classiﬁcation, and adapt techniques such as consistency regularization [216], [217], [218], [219], self-training [202], [210], [220], [221], [222], [223], [224], GAN frameworks [225], [226], [227] in SSL, or contrastive learning [228], [229], [230], [231] in UL to learn from unlabeled images. Nevertheless, unsupervised loss terms in semantic segmentation are often required to impose in a per-pixel manner to align with the pixel-wise learning objective in semantic segmentation. In the following, we discuss the three most representative lines of state-of-the-art methods driven by recent advances in SSL and UL for semi-supervised semantic segmentation.
+Consistency regularization (§2.2.1) can be generalized for pixel-wise tasks by formulating the consistency loss (Eq. (2), Eq. (3)) at the pixel level. In a similar spirit as the standard consistency regularization in SSL, recent works in semisupervised semantic segmentation [216], [217], [218], [219] resort to enforcing pixel consistency among the images before and after perturbations, whilst perturbations being introduced at the input space [216] or feature space [217]. For instance, the ﬁrst consistency regularization method in semantic segmentation [216] applies CutOut [78] and CutMix [232] augmentation techniques to perturb the input
+
+images with partial corruption, and imposes pixel-level loss terms to ensure the uncorrupted regions in perturbed images should have consistent pixel-wise predictions as the same regions in original images. A cross-consistency training [217] instead applies feature perturbations by injecting noise into network’s activations and enforces pixel consistency between the clean and perturbed outputs.
+Self-training algorithms (§2.2.2) are adapted and shown effective for semi-supervised semantic segmentation [202], [210], [220], [221], [222], [223], [224], where pseudo segmentation maps on unlabeled images are propagated using a pre-trained teacher model [223], or a co-trained model [202]. For example, a self-training method [223] propagates pseudo segmentation labels with two steps – (1) assigning pixel-wise pseudo labels on unlabeled data with a pre-trained teacher model; and (2) re-training a student model with the re-labeled dataset – until no more performance gain is achieved. Another self-training approach [202] adopts a co-training scheme by training two models to learn the per-pixel segmentation predictions from each others.
+Contrastive learning is widely used in UL and adapted to learn from unlabeled data in semantic segmentation [228], [229], [230], [231]. To formulate the contrastive loss (Eq. (12)) per pixel, one needs select meaningful positive and negative pairs with consideration of pixel spatial locations. For this aim, a directional context-aware contrastive loss [228] is proposed to crop two patches from one image, and take features at the same location as a positive pair and the rest as negative pairs. Another pixel contrastive loss [230] is introduced to align the features before and after a random color augmentation by taking features at the same location as a positive pair, while sampling a ﬁxed amount of negative pairs from different images.
+4.2.2 Object Detection
+Object detection aims to predict a set of bounding boxes and the corresponding class labels for the objects of interest in an image. An object detector needs to unify classiﬁcation and localization into one model by jointly training a classiﬁer to predict class labels and a regression head to generate the bounding boxes [5], [233]. It is an important computer vision task that widely impacts different applications such as person search [234], vehicle detection [235], logo detection [236], text detection [237], etc. Supervised object detection requires costly annotation efforts – annotating the bounding box of a single object takes up to 42 seconds [238].
+To exploit the unlabeled data without bounding box or class label information, a group of works in object detection exploit unlabeled data to boost model generalization by training on a small set of labeled data and a set of completely unlabeled images – known as semi-supervised object detection. These works mainly reformulate two streams of SSL techniques, including consistency regularization [30], [203], [239], [240], [241], [242] and self-training [35], [243], [244], [245], [246], both of which introduce the learning targets for both bounding boxes and class labels to learn from the completely unlabeled data, as detailed next.
+Consistency regularization (§2.2.1) is introduced for semisupervised object detection to propagate the soft label and bounding boxes assignment on unlabeled images based on
+
+15
+
+dual consistency constraints on classiﬁcation and regression [30], [203], [239], [240], [241], [242]. One line of works apply data augmentation such as random ﬂipping [203] and MixUp [75] to generate augmented views of unlabeled images and encourage the predicted bounding boxes and its class labels remain consistent for the different views. Compared to standard consistency regularization, these methods especially need re-estimating the bounding box location in an augmented image, such as ﬂip the bounding box [203], or calculate the overlapped bounding boxes of two mixed images in MixUp [75]. Another line of works follow a teacher-student training framework and impose teacherstudent consistency [30], [240], [241], [242] similar to Mean Teacher [39]. The teacher model is derived either from the student model via exponential mean average (EMA) [30], [240], [242], or by applying non-maximum suppression (NMS, a ﬁltering technique for reﬁning the detected bounding boxes) on the instant model outputs [241] to obtain the pseudo bounding boxes and label annotations for training.
+Self-training algorithms (§2.2.2) are also introduced to annotated unlabeled images for object detection [35], [243], [244], [245], [246]. A simple self-training paradigm is to annotate the unlabeled images with bounding boxes and their class labels using a pre-trained teacher model and use these data for re-training [243]. However, such pseudo annotations may be rather noisy. To improve the quality of pseudo labels, recent works propose interactive self-training to progressively reﬁne the pseudo labels with NMS [244], or quantify model uncertainty to select or derive more reliable pseudo labels [245], [246] to learn from unlabeled data.
+4.2.3 Unsupervised Domain Adaptation
+Unsupervised domain adaptation (UDA) is a special case of SSL where the labeled (source) and unlabeled (target) data lie in different distributions, a.k.a. different domains. UDA is essential for visual recognition [247], as the statistical properties of visual data are sensitive to a wider variety of factors, e.g., illumination, viewpoint, resolution, occlusion, times of the day, and weather conditions. While most UDA methods focus on tackling the domain gap between the labeled and unlabeled data, SSL and UL algorithms can also be adapted to learn from unlabeled data in UDA, as follows.
+Consistency regularization (§2.2.1) is shown to be effective in UDA. In the same spirit of encouraging consistent outputs under perturbations, various UDA approaches apply input transformations or model ensembling to simulate variations in input or model space [39], [248], [249], [250]. To generate input variations, a dual MixUp regularization integrates category-level MixUp and domainlevel MixUp to regularize the model with consistency constraints, thus learning from unlabeled data to enhance domain-invariance [248]. To generate model variations, selfensembling [249] utilizes the Mean Teacher [39] to impute unlabeled training targets in target domain.
+Self-training (§2.2.2) has been also useful for UDA. Similar to SSL, self-training for UDA include three streams of techniques to impute pseudo labels on the unlabeled target samples, including entropy minimization, pseudo-label and co-training. To ensure the effectiveness, self-training methods are often coupled with domain distribution alignment
+
+for reducing the domain shift. For instance, entropy minimization (Eq. (4)) is adopted for UDA [251], [252], [253], in combination with distribution alignment techniques such as domain-speciﬁc batch normalization layers [251], aligning second-order statistics of features [252], or adversarial training and gradient synchronization [253]. Co-training (Eq. (5)) is also introduced for UDA, which imputes training targets from multiple co-trained classiﬁers to learn from unlabeled data and match cross-domain distributions [254].
+Deep generative models (DGMs), as a class of models for SSL and UL (§2.2.4, §3.2.3), are widely adopted for UDA. In contrast to other UDA methods that reduce the domain shift at the feature level, DGMs provide an alternative and complementary solution to mitigate the domain discrepancy at pixel level by cross-domain image-to-image translation. The majority of these frameworks are based on GANs, such as PixelDA [255], generate to adapt [256], and GANs with cycle-consistency like CyCADA [257], SBADA-GAN [258], I2I Adapt [259] and CrDoCo [260]. These models typically learn a real-to-real [257], [258], [260], [261] or synthetic-toreal [255], [256], [262] mapping to render the image style from the labeled source to the unlabeled target domain, thus offering synthetic training data with pseudo labels.
+Self-supervised learning popularized in SSL and UL (§2.2.5, §3.2.1), is also introduced in UDA to construct auxiliary self-supervised learning objectives on unlabeled data. Self-supervised models often address the UDA problem by self-supervision coupled with a supervised objective on the labeled source data [164], [204], [263], [264]. The pioneer work in this direction is JiGen [164], which learns jointly to classify objects and solve the jigsaw puzzles [121] pretext task to achieve better generalization in new domains. Recent works [204], [263], [264] explored other self-supervised pretext tasks such as predicting rotation [204], [263], [264], ﬂipping [204] and patch ordering [204]. Besides pretext tasks, recent UDA methods also explored discriminative selfsupervision signals based on clustering or contrastive learning. For instance, DANCE [205] performs neighborhood clustering by assigning the target samples to a “known” class prototype in the source domain or its neighbor in the target domain. Gradient regularized contrastive learning [265] leverages the contrastive loss to push unlabeled target samples towards the most similar labeled source samples. Similarly, [266] aligns target domain features to class prototypes in the source domain through contrastive loss, minimizing the distances between the cross-domain samples that likely belong to the same class.
+5 EMERGING TRENDS AND OPEN CHALLENGES
+In this section, we discuss the emerging trends in SSL and UL from unlabeled data, covering three directions, namely open-set learning (§5.1), incremental learning (§5.2) and multi-modal learning (§5.3). We detail both recent developments and open challenges.
+5.1 Open-Set Learning from Unlabeled Data
+In §2, we review works addressing the relatively simple closed-set learning in SSL, which assume that unlabeled data share the same label space as the labeled one. However,
+
+16
+
+this closed-set assumption may greatly hinder the effectiveness of SSL in leveraging real-world uncurated unlabeled data that contains unseen classes, i.e., out-of-distribution (OOD) samples (also known as outliers) [40]. When applying most existing SSL methods to open-set learning with noisy unlabeled data, their model performance may degrade signiﬁcantly, as the OOD samples could induce catastrophic error propagation.
+A line of works propose to address a more complex openset SSL scenario [14], [15], [267], [268], [269], [270], [271], [272], where the unlabeled set contains task-irrelevant OOD data. In this setup (so-called open-world SSL), unlabeled samples are not all beneﬁcial. To prevent possible performance hazards caused by unlabeled OOD samples, recent advances in SSL propose various sample-speciﬁc selection strategies to discount their importance or usage [14], [15], [267], [268]. The pioneer works including UASD [14] and DS3L [15] propose to impose a dynamic weighting function to down-weight the unsupervised regularization loss term proportional to the likelihood that an unlabeled sample belongs to an unseen class. Follow-up works resort to curriculum learning [267] and iterative self-training [268] by training an OOD classiﬁer to detect and discard the potentially detrimental samples. More recently, OpenMatch [270] propose to train a set of one-vs-all classiﬁers for detecting inliers and outliers and regularize the model with a consistency constraint on only the unlabeled inliers.
+Open Challenges. The open-set SSL calls for integrating OOD detection [273] or novel class discovery [274] with semi-supervised learning in a uniﬁed model to advance selective exploitation of noisy unlabeled data. Moreover, a more recent work propose a universal SSL benchmark [271] which further extends the distribution mismatch problem in open-set setup as subset or intersectional class mismatch, and feature distribution mismatch. These more realistic setups pose multiple new challenges, including conﬁdence calibration of DNN for OOD detection [273], [273], [275], [276], [277], imbalanced class distribution caused by realworld long-tailed distributed unlabeled data [278], [279], and discovery of unseen classes in unlabeled data [274], [280], [281]. Although recent advances in open-set SSL have explored OOD detection, the other challenges remain to be resolved to exploit real-world unlabeled data.
+5.2 Incremental Learning from Unlabeled Data
+Existing works on SSL and UL often assume all unlabeled training data is available at once, which however may not always hold in practice due to privacy concerns or computational constraints. In many realistic scenarios, we need to perform incremental learning (IL) with new data to update the model incrementally without access to past training data. Here we review research directions on IL from unlabeled data [282], [283] and discuss its open challenges.
+Incremental learning (IL) from unlabeled data has been investigated in a semi-supervised fashion [282]. IL (also known as continual learning and lifelong learning [284]) aims to extend an existing model’s knowledge without accessing the previous training data. Most existing IL approaches use regularization objectives to not forget old knowledge, i.e., reducing catastrophic forgetting [285], [286],
+
+[287], [288]. To this aim, unlabeled data is often used in IL to prevent catastrophic forgetting by estimating the importance weights of model parameters for old tasks [289], or formulating a knowledge distillation objective [282], [290] to consolidate the knowledge learned from old data. Recently, multiple works explore IL from unlabeled data that comes as a non-stationary stream [283], [291], with the class label space possibly varying over time [292]. In this setting, the goal is to learn a salient representation from continuous incoming unlabeled data stream. To expand the representations for novel classes and unlabeled data, several strategies are adopted to dynamically update representations in the latent space, such as creating new cluster centroids by online clustering [292] and updating mixture-of-Gaussians [283]. Some recent works apply self-supervised techniques on the unlabeled test-data [293], [294], [295], which is useful to overcome possible shifts in the data distribution [296].
+Open Challenges. Incremental learning from unlabeled data requires solving multiple challenges, ranging from catastrophic forgetting [282], [297], modeling new concepts [283], [292] to predicting the evolution of data streams [296]. Due to lacking the access to all the unlabeled training data at once, addressing these challenges is nontrivial as directly applying many existing SSL and UL methods could not guarantee good generalization performance. As an example, pseudo labels may suffer the conﬁrmation bias problem [298] when classifying unseen unlabeled data. Thus, incremental learning from a stream of potentially noni.i.d. unlabeled data remains an open challenge.
+5.3 Multi-Modal Learning from Unlabeled Data
+A growing number of works combine visual and nonvisual modalities (e.g., text, audio) to form discriminative self-supervision signals that enable learning from multimodal unlabeled data. To bring vision and language for unsupervised learning, variants of vision and language BERT models (e.g., ViLBERT [299], LXMERT [300], VLBERT [301], Uniter [302] and Unicoder-VL [303]) are built upon the transformer blocks [304] to jointly model images and natural language in an unsupervised way. Speciﬁcally, the visual, linguistic or their joint representations can be learned in an unsupervised manner by solving the Cloze task in natural language processing which predicts the masked words in the input sentences [305], or by optimizing a linguistic-visual alignment objective [300], [306]. Another line of works utilize the language supervision (e.g., from web data [307] or narrated materials [308], [309], [310], [311], [312], [313]) to guide unsupervised representation learning by aligning images and languages in the shared latent space, as exempliﬁed by CLIP [312] and ALIGN [313].
+Similarly, to combine audio and visual modalities for unsupervised learning, existing works exploit the natural audio-visual correspondence in videos to formulate various self-supervised signals, which predict the cross-modal correspondence [314], [315], align the temporally corresponding representations [309], [316], [317], [318], or cluster their representations in a shared audio-visual latent space [208], [319]. Several works further explore audio, vision and language together for unsupervised representation learning by aligning different modalities in a shared multi-modal latent
+
+17
+
+space [310], [320] or in a hierarchical latent space for audiovision and vision-language [308]. Open Challenges. The success of multi-modal learning from unlabeled data often relies on an assumption that different modalities are semantically correlated. For instance, when clustering audio and video data for unsupervised representation learning [208], or transferring text knowledge to the unlabeled image data [321], the two data modalities are assumed to share similar semantics. However, this assumption may not hold in real-world data, leading to degraded model performance [309], [322]. Thus, it remains an open challenge to learn from the multi-modal unlabeled data that contains a semantic gap across modalities.
+6 CONCLUSION
+Learning visual representations with limited or no manual supervision is critical for scalable computer vision applications. Semi-supervised learning (SSL) and unsupervised learning (UL) models provide feasible and promising solutions to learn from unlabeled visual data. In this comprehensive survey, we have introduced uniﬁed problem deﬁnitions and taxonomies to summarize and correlate a wide variety of recent advanced and popularized SSL and UL deep learning methodologies for building superior visual classiﬁcation models. We believe that our concise taxonomies of existing algorithms and extensive discussions of emerging trends help to better understand the status quo of research in visual representation learning with unlabeled data, as well as to inspire new learning solutions for major unresolved challenges involved in the limited-label regime.
+ACKNOWLEDGMENTS
+This work has been partially funded by the ERC (853489DEXIM) and the DFG (2064/1–Project number 390727645).
+REFERENCES
+[1] Y. LeCun, Y. Bengio, and G. Hinton, “Deep learning,” Nature, 2015.
+[2] I. Goodfellow, Y. Bengio, and A. Courville, “Deep learning,” MIT press, 2016.
+[3] A. Krizhevsky, I. Sutskever, and G. E. Hinton, “Imagenet classiﬁcation with deep convolutional neural networks,” in NeurIPS, 2012.
+[4] F. Schroff, D. Kalenichenko, and J. Philbin, “Facenet: A uniﬁed embedding for face recognition and clustering,” in CVPR, 2015.
+[5] S. Ren, K. He, R. Girshick, and J. Sun, “Faster r-cnn: Towards realtime object detection with region proposal networks,” in NeurIPS, 2015.
+[6] L.-C. Chen, G. Papandreou, I. Kokkinos, K. Murphy, and A. L. Yuille, “Deeplab: Semantic image segmentation with deep convolutional nets, atrous convolution, and fully connected crfs,” IEEE TPAMI, 2017.
+[7] Z.-H. Zhou and M. Li, “Semi-supervised regression with cotraining.” in IJCAI, 2005.
+[8] O. Chapelle, B. Scholkopf, and A. Zien, “Semi-supervised learning,” IEEE TNNLS, 2009.
+[9] K. Q. Weinberger and L. K. Saul, “Unsupervised learning of image manifolds by semideﬁnite programming,” IJCV, 2006.
+[10] Y. Bengio, A. Courville, and P. Vincent, “Representation learning: A review and new perspectives,” IEEE TPAMI, 2013.
+[11] C. Doersch, A. Gupta, and A. A. Efros, “Unsupervised visual representation learning by context prediction,” in ICCV, 2015.
+[12] T. Chen, S. Kornblith, M. Norouzi, and G. Hinton, “A simple framework for contrastive learning of visual representations,” in ICML, 2020.
+
+[13] X. J. Zhu, “Semi-supervised learning literature survey,” University of Wisconsin-Madison Department of Computer Sciences, Tech. Rep., 2005.
+[14] Y. Chen, X. Zhu, W. Li, and S. Gong, “Semi-supervised learning under class distribution mismatch.” in AAAI, 2020.
+[15] L.-Z. Guo, Z.-Y. Zhang, Y. Jiang, Y.-F. Li, and Z.-H. Zhou, “Safe deep semi-supervised learning for unseen-class unlabeled data,” in ICML, 2020.
+[16] K. He, H. Fan, Y. Wu, S. Xie, and R. Girshick, “Momentum contrast for unsupervised visual representation learning,” in CVPR, 2020.
+[17] J. E. Van Engelen and H. H. Hoos, “A survey on semi-supervised learning,” ML, 2020.
+[18] L. Jing and Y. Tian, “Self-supervised visual feature learning with deep neural networks: A survey,” IEEE TPAMI, 2020.
+[19] L. Schmarje, M. Santarossa, S.-M. Schro¨ der, and R. Koch, “A survey on semi-, self-and unsupervised learning for image classiﬁcation,” arXiv:2002.08721, 2020.
+[20] G.-J. Qi and J. Luo, “Small data challenges in big data era: A survey of recent progress on unsupervised and semi-supervised methods,” IEEE TPAMI, 2020.
+[21] R. Fergus, Y. Weiss, and A. Torralba, “Semi-supervised learning in gigantic image collections,” in NeurIPS, 2009.
+[22] N. Papernot, M. Abadi, U´ . Erlingsson, I. Goodfellow, and K. Talwar, “Semi-supervised knowledge transfer for deep learning from private training data,” in ICLR, 2017.
+[23] A. Blum and T. Mitchell, “Combining labeled and unlabeled data with co-training,” in COLT, 1998.
+[24] K. Nigam and R. Ghani, “Analyzing the effectiveness and applicability of co-training,” in CIKM, 2000.
+[25] M. W. Libbrecht and W. S. Noble, “Machine learning applications in genetics and genomics,” Nature Reviews Genetics, 2015.
+[26] D. Berthelot, N. Carlini, I. Goodfellow, N. Papernot, A. Oliver, and C. Raffel, “Mixmatch: A holistic approach to semi-supervised learning,” in NeurIPS, 2019.
+[27] D. Berthelot, N. Carlini, E. D. Cubuk, A. Kurakin, K. Sohn, H. Zhang, and C. Raffel, “Remixmatch: Semi-supervised learning with distribution alignment and augmentation anchoring,” in ICLR, 2020.
+[28] Y. K. Jang and N. I. Cho, “Generalized product quantization network for semi-supervised image retrieval,” in CVPR, 2020.
+[29] J. Gao, J. Wang, S. Dai, L.-J. Li, and R. Nevatia, “Note-rcnn: Noise tolerant ensemble rcnn for semi-supervised object detection,” in ICCV, 2019.
+[30] Y. Tang, W. Chen, Y. Luo, and Y. Zhang, “Humble teachers teach better students for semi-supervised object detection,” in CVPR, 2021.
+[31] T. Kalluri, G. Varma, M. Chandraker, and C. Jawahar, “Universal semi-supervised semantic segmentation,” in ICCV, 2019.
+[32] Y. Ouali, C. Hudelot, and M. Tami, “Semi-supervised semantic segmentation with cross-consistency training,” in CVPR, 2020.
+[33] M. S. Ibrahim, A. Vahdat, M. Ranjbar, and W. G. Macready, “Semisupervised semantic image segmentation with self-correcting networks,” in CVPR, 2020.
+[34] Y. Chen, Z. Tu, L. Ge, D. Zhang, R. Chen, and J. Yuan, “Sohandnet: Self-organizing network for 3d hand pose estimation with semi-supervised learning,” in ICCV, 2019.
+[35] I. Radosavovic, P. Dolla´r, R. Girshick, G. Gkioxari, and K. He, “Data distillation: Towards omni-supervised learning,” in CVPR, 2018.
+[36] R. Mitra, N. B. Gundavarapu, A. Sharma, and A. Jain, “Multiview-consistent semi-supervised learning for 3d human pose estimation,” in CVPR, 2020.
+[37] S. Laine and T. Aila, “Temporal ensembling for semi-supervised learning,” in ICLR, 2017.
+[38] K. Sohn, D. Berthelot, C.-L. Li, Z. Zhang, N. Carlini, E. D. Cubuk, A. Kurakin, H. Zhang, and C. Raffel, “Fixmatch: Simplifying semi-supervised learning with consistency and conﬁdence,” in NeurIPS, 2020.
+[39] A. Tarvainen and H. Valpola, “Mean teachers are better role models: Weight-averaged consistency targets improve semisupervised deep learning results,” in NeurIPS, 2017.
+[40] A. Oliver, A. Odena, C. A. Raffel, E. D. Cubuk, and I. Goodfellow, “Realistic evaluation of deep semi-supervised learning algorithms,” in NeurIPS, 2018.
+
+18
+
+[41] B. Athiwaratkun, M. Finzi, P. Izmailov, and A. G. Wilson, “There are many consistent explanations of unlabeled data: Why you should average,” in ICLR, 2019.
+[42] D. Zhou, O. Bousquet, T. N. Lal, J. Weston, and B. Scho¨ lkopf, “Learning with local and global consistency,” in NeurIPS, 2004.
+[43] O. Chapelle, J. Weston, and B. Scho¨ lkopf, “Cluster kernels for semi-supervised learning,” in NeurIPS, 2002.
+[44] J. Weston, F. Ratle, H. Mobahi, and R. Collobert, “Deep learning via semi-supervised embedding,” in ICML, 2008.
+[45] O. Chapelle, A. Zien, C. Z. Ghahramani et al., “Semi-supervised classiﬁcation by low density separation,” in AISTATSW, 2005.
+[46] M. Sajjadi, M. Javanmardi, and T. Tasdizen, “Regularization with stochastic transformations and perturbations for deep semisupervised learning,” in NeurIPS, 2016.
+[47] X. Wang, D. Kihara, J. Luo, and G.-J. Qi, “Enaet: A self-trained framework for semi-supervised and supervised learning with ensemble transformations,” IEEE TIP, 2020.
+[48] T. Miyato, S.-i. Maeda, M. Koyama, K. Nakae, and S. Ishii, “Distributional smoothing with virtual adversarial training,” in ICLR, 2016.
+[49] T. Miyato, S.-i. Maeda, M. Koyama, and S. Ishii, “Virtual adversarial training: a regularization method for supervised and semisupervised learning,” IEEE TPAMI, 2018.
+[50] V. Verma, A. Lamb, J. Kannala, Y. Bengio, and D. Lopez-Paz, “Interpolation consistency training for semi-supervised learning,” in IJCAI, 2019.
+[51] Q. Xie, Z. Dai, E. Hovy, T. Luong, and Q. Le, “Unsupervised data augmentation for consistency training,” in NeurIPS, 2020.
+[52] P. Bachman, O. Alsharif, and D. Precup, “Learning with pseudoensembles,” in NeurIPS, 2014.
+[53] A. Rasmus, M. Berglund, M. Honkala, H. Valpola, and T. Raiko, “Semi-supervised learning with ladder networks,” in NeurIPS, 2015.
+[54] S. Park, J.-K. Park, S.-J. Shin, and I.-C. Moon, “Adversarial dropout for supervised and semi-supervised learning,” in AAAI, 2018.
+[55] L. Zhang and G.-J. Qi, “Wcp: Worst-case perturbations for semisupervised deep learning,” in CVPR, 2020.
+[56] D.-H. Lee, “Pseudo-label: The simple and efﬁcient semisupervised learning method for deep neural networks,” in ICMLW, 2013.
+[57] Y. Chen, X. Zhu, and S. Gong, “Semi-supervised deep learning with memory,” in ECCV, 2018.
+[58] S. Qiao, W. Shen, Z. Zhang, B. Wang, and A. Yuille, “Deep cotraining for semi-supervised image recognition,” in ECCV, 2018.
+[59] W. Dong-DongChen and Z.-H. WeiGao, “Tri-net for semisupervised deep learning,” in IJCAI, 2018.
+[60] Q. Xie, M.-T. Luong, E. Hovy, and Q. V. Le, “Self-training with noisy student improves imagenet classiﬁcation,” in CVPR, 2020.
+[61] Y. Luo, J. Zhu, M. Li, Y. Ren, and B. Zhang, “Smooth neighbors on teacher graphs for semi-supervised learning,” in CVPR, 2018.
+[62] T. N. Kipf and M. Welling, “Semi-supervised classiﬁcation with graph convolutional networks,” in ICLR, 2017.
+[63] A. Iscen, G. Tolias, Y. Avrithis, and O. Chum, “Label propagation for deep semi-supervised learning,” in CVPR, 2019.
+[64] D. P. Kingma, S. Mohamed, D. J. Rezende, and M. Welling, “Semisupervised learning with deep generative models,” in NeurIPS, 2014.
+[65] L. Maaløe, C. K. Sønderby, S. K. Sønderby, and O. Winther, “Auxiliary deep generative models,” in ICML, 2016.
+[66] J. T. Springenberg, “Unsupervised and semi-supervised learning with categorical generative adversarial networks,” in ICLR, 2016.
+[67] T. Salimans, I. Goodfellow, W. Zaremba, V. Cheung, A. Radford, and X. Chen, “Improved techniques for training gans,” in NeurIPS, 2016.
+[68] V. Dumoulin, I. Belghazi, B. Poole, A. Lamb, M. Arjovsky, O. Mastropietro, and A. Courville, “Adversarially learned inference,” in ICLR, 2017.
+[69] Z. Dai, Z. Yang, F. Yang, W. W. Cohen, and R. R. Salakhutdinov, “Good semi-supervised learning that requires a bad gan,” in NeurIPS, 2017.
+[70] G.-J. Qi, L. Zhang, H. Hu, M. Edraki, J. Wang, and X.-S. Hua, “Global versus localized generative adversarial nets,” in CVPR, 2018.
+[71] X. Zhai, A. Oliver, A. Kolesnikov, and L. Beyer, “S4l: Selfsupervised semi-supervised learning,” in ICCV, 2019.
+
+[72] T. Chen, S. Kornblith, K. Swersky, M. Norouzi, and G. E. Hinton, “Big self-supervised models are strong semi-supervised learners,” in NeurIPS, 2020.
+[73] X. Zhu and Z. Ghahramani, “Learning from labeled and unlabeled data with label propagation,” Technical Report, Carnegie Mellon University, 2002.
+[74] T. Suzuki and I. Sato, “Adversarial transformations for semisupervised learning.” in AAAI, 2020.
+[75] H. Zhang, M. Cisse, Y. N. Dauphin, and D. Lopez-Paz, “mixup: Beyond empirical risk minimization,” in ICLR, 2018.
+[76] E. D. Cubuk, B. Zoph, D. Mane, V. Vasudevan, and Q. V. Le, “Autoaugment: Learning augmentation policies from data,” arXiv:1805.09501, 2018.
+[77] E. D. Cubuk, B. Zoph, J. Shlens, and Q. V. Le, “Randaugment: Practical automated data augmentation with a reduced search space,” in CVPRW, 2020.
+[78] T. DeVries and G. W. Taylor, “Improved regularization of convolutional neural networks with cutout,” arXiv:1708.04552, 2017.
+[79] C. Szegedy, W. Zaremba, I. Sutskever, J. Bruna, D. Erhan, I. Goodfellow, and R. Fergus, “Intriguing properties of neural networks,” in ICLR, 2014.
+[80] A. Kurakin, I. Goodfellow, and S. Bengio, “Adversarial examples in the physical world,” in ICLR, 2017.
+[81] A. Najaﬁ, S.-i. Maeda, M. Koyama, and T. Miyato, “Robustness to adversarial perturbations in learning from incomplete data,” in NeurIPS, 2019.
+[82] Y. Carmon, A. Raghunathan, L. Schmidt, J. C. Duchi, and P. S. Liang, “Unlabeled data improves adversarial robustness,” in NeurIPS, 2019.
+[83] S. Lim, I. Kim, T. Kim, C. Kim, and S. Kim, “Fast autoaugment,” in NeurIPS, 2019.
+[84] D. Ho, E. Liang, X. Chen, I. Stoica, and P. Abbeel, “Population based augmentation: Efﬁcient learning of augmentation policy schedules,” in ICML, 2019.
+[85] X. Zhang, Q. Wang, J. Zhang, and Z. Zhong, “Adversarial autoaugment,” in ICLR, 2019.
+[86] P. Izmailov, D. Podoprikhin, T. Garipov, D. Vetrov, and A. G. Wilson, “Averaging weights leads to wider optima and better generalization,” in UAI, 2018.
+[87] T. M. Mitchell, “Generalization as search,” AI, 1982. [88] R. E. Schapire, “The strength of weak learnability,” ML, 1990. [89] L. Breiman, “Random forests,” ML, 2001.
+[90] Y. Freund, R. Schapire, and N. Abe, “A short introduction to boosting,” Journal-Japanese Society For Artiﬁcial Intelligence, 1999.
+[91] B. Lakshminarayanan, A. Pritzel, and C. Blundell, “Simple and scalable predictive uncertainty estimation using deep ensembles,” in NeurIPS, 2017.
+[92] Y. Grandvalet and Y. Bengio, “Semi-supervised learning by entropy minimization,” in NeurIPS, 2005.
+[93] M. Sajjadi, M. Javanmardi, and T. Tasdizen, “Mutual exclusivity loss for semi-supervised deep learning,” in ICIP, 2016.
+[94] J. Snell, K. Swersky, and R. Zemel, “Prototypical networks for few-shot learning,” in NeurIPS, 2017.
+[95] Z. Ke, D. Wang, Q. Yan, J. Ren, and R. W. Lau, “Dual student: Breaking the limits of the teacher in semi-supervised learning,” in CVPR, 2019.
+[96] I. J. Goodfellow, J. Shlens, and C. Szegedy, “Explaining and harnessing adversarial examples,” in ICLR, 2015.
+[97] G. Hinton, O. Vinyals, and J. Dean, “Distilling the knowledge in a neural network,” arXiv:1503.02531, 2015.
+[98] C. Buciluaˇ, R. Caruana, and A. Niculescu-Mizil, “Model compression,” in ACM SIGKDD, 2006.
+[99] J. Ba and R. Caruana, “Do deep nets really need to be deep?” NeurIPS, 2014.
+[100] I. Z. Yalniz, H. Je´gou, K. Chen, M. Paluri, and D. Mahajan, “Billion-scale semi-supervised learning for image classiﬁcation,” arXiv:1905.00546, 2019.
+[101] X. Zhu, Z. Ghahramani, and J. D. Lafferty, “Semi-supervised learning using gaussian ﬁelds and harmonic functions,” in ICML, 2003.
+[102] M. Belkin, P. Niyogi, and V. Sindhwani, “Manifold regularization: A geometric framework for learning from labeled and unlabeled examples,” JMLR, 2006.
+[103] B. Wang, Z. Tu, and J. K. Tsotsos, “Dynamic label propagation for semi-supervised multi-class multi-label classiﬁcation,” in CVPR, 2013.
+
+19
+
+[104] B. Jiang, Z. Zhang, D. Lin, J. Tang, and B. Luo, “Semi-supervised learning with graph learning-convolutional networks,” in CVPR, 2019.
+[105] J. Bromley, J. W. Bentz, L. Bottou, I. Guyon, Y. LeCun, C. Moore, E. Sa¨ckinger, and R. Shah, “Signature veriﬁcation using a “siamese” time delay neural network,” IJPRAI, 1993.
+[106] R. Hadsell, S. Chopra, and Y. LeCun, “Dimensionality reduction by learning an invariant mapping,” in CVPR, 2006.
+[107] W. Lin, Z. Gao, and B. Li, “Shoestring: Graph-based semisupervised classiﬁcation with severely limited labeled data,” in CVPR, 2020.
+[108] S. Li, B. Liu, D. Chen, Q. Chu, L. Yuan, and N. Yu, “Density-aware graph for deep semi-supervised visual recognition,” in CVPR, 2020.
+[109] D. P. Kingma and M. Welling, “Auto-encoding variational bayes,” arXiv:1312.6114, 2013.
+[110] I. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu, D. WardeFarley, S. Ozair, A. Courville, and Y. Bengio, “Generative adversarial nets,” in NeurIPS, 2014.
+[111] C. Doersch, “Tutorial on variational autoencoders,” arXiv:1606.05908, 2016.
+[112] M. Ehsan Abbasnejad, A. Dick, and A. van den Hengel, “Inﬁnite variational autoencoder for semi-supervised learning,” in CVPR, 2017.
+[113] A. Kumar, P. Sattigeri, and T. Fletcher, “Semi-supervised learning with gans: Manifold invariance with improved inference,” in NeurIPS, 2017.
+[114] C. Li, T. Xu, J. Zhu, and B. Zhang, “Triple generative adversarial nets,” in NeurIPS, 2017.
+[115] S. Reed, Z. Akata, X. Yan, L. Logeswaran, B. Schiele, and H. Lee, “Generative adversarial text to image synthesis.” in ICML, 2016.
+[116] S. Reed, Z. Akata, S. Mohan, S. Tenka, B. Schiele, and H. Lee, “Learning what and where to draw.” in NIPS, 2016.
+[117] Y. Xian, T. Lorenz, B. Schiele, and Z. Akata, “Feature generating networks for zero-shot learning,” in CVPR, 2018.
+[118] Y. Xian, S. Sharma, B. Schiele, and Z. Akata, “F-vaegan-d2: A feature generating framework for any-shot learning,” in CVPR, 2019.
+[119] A. Dosovitskiy, J. T. Springenberg, M. Riedmiller, and T. Brox, “Discriminative unsupervised feature learning with convolutional neural networks,” in NeurIPS, 2014.
+[120] A. Dosovitskiy, P. Fischer, J. T. Springenberg, M. Riedmiller, and T. Brox, “Discriminative unsupervised feature learning with exemplar convolutional neural networks,” IEEE TPAMI, 2015.
+[121] M. Noroozi and P. Favaro, “Unsupervised learning of visual representations by solving jigsaw puzzles,” in ECCV, 2016.
+[122] M. Noroozi, H. Pirsiavash, and P. Favaro, “Representation learning by learning to count,” in ICCV, 2017.
+[123] S. Gidaris, P. Singh, and N. Komodakis, “Unsupervised representation learning by predicting image rotations,” in ICLR, 2018.
+[124] G. E. Hinton and R. R. Salakhutdinov, “Reducing the dimensionality of data with neural networks,” Science, 2006.
+[125] J. Masci, U. Meier, D. Cires¸an, and J. Schmidhuber, “Stacked convolutional auto-encoders for hierarchical feature extraction,” in ICANN, 2011.
+[126] D. Pathak, P. Krahenbuhl, J. Donahue, T. Darrell, and A. A. Efros, “Context encoders: Feature learning by inpainting,” in CVPR, 2016.
+[127] K. He, X. Chen, S. Xie, Y. Li, P. Dolla´r, and R. Girshick, “Masked autoencoders are scalable vision learners,” in CVPR, 2022.
+[128] P. Vincent, H. Larochelle, Y. Bengio, and P.-A. Manzagol, “Extracting and composing robust features with denoising autoencoders,” in ICML, 2008.
+[129] R. Zhang, P. Isola, and A. A. Efros, “Colorful image colorization,” in ECCV, 2016.
+[130] ——, “Split-brain autoencoders: Unsupervised learning by crosschannel prediction,” in CVPR, 2017.
+[131] G. Larsson, M. Maire, and G. Shakhnarovich, “Colorization as a proxy task for visual understanding,” in CVPR, 2017.
+[132] Z. Wu, Y. Xiong, S. X. Yu, and D. Lin, “Unsupervised feature learning via non-parametric instance discrimination,” in CVPR, 2018.
+[133] I. Misra and L. v. d. Maaten, “Self-supervised learning of pretextinvariant representations,” in CVPR, 2020.
+[134] Y. Tian, D. Krishnan, and P. Isola, “Contrastive multiview coding,” in ECCV, 2020.
+
+[135] X. Chen and K. He, “Exploring simple siamese representation learning,” in CVPR, 2021.
+[136] J.-B. Grill, F. Strub, F. Altche´, C. Tallec, P. H. Richemond, E. Buchatskaya, C. Doersch, B. A. Pires, Z. D. Guo, M. G. Azar et al., “Bootstrap your own latent: A new approach to selfsupervised learning,” in NeurIPS, 2020.
+[137] Y. Tian, X. Chen, and S. Ganguli, “Understanding self-supervised learning dynamics without contrastive pairs,” in ICML, 2021.
+[138] M. Caron, P. Bojanowski, A. Joulin, and M. Douze, “Deep clustering for unsupervised learning of visual features,” in ECCV, 2018.
+[139] J. Yang, D. Parikh, and D. Batra, “Joint unsupervised learning of deep representations and image clusters,” in CVPR, 2016.
+[140] Y. Asano, C. Rupprecht, and A. Vedaldi, “Self-labelling via simultaneous clustering and representation learning,” in ICLR, 2020.
+[141] X. Ji, J. F. Henriques, and A. Vedaldi, “Invariant information clustering for unsupervised image classiﬁcation and segmentation,” in CVPR, 2019.
+[142] J. Huang, S. Gong, and X. Zhu, “Deep semantic clustering by partition conﬁdence maximisation,” in CVPR, 2020.
+[143] P. Haeusser, J. Plapp, V. Golkov, E. Aljalbout, and D. Cremers, “Associative deep clustering: Training a classiﬁcation network with no labels,” in GCPR, 2018.
+[144] M. Caron, I. Misra, J. Mairal, P. Goyal, P. Bojanowski, and A. Joulin, “Unsupervised learning of visual features by contrasting cluster assignments,” in NeurIPS, 2020.
+[145] A. Radford, L. Metz, and S. Chintala, “Unsupervised representation learning with deep convolutional generative adversarial networks,” arXiv:1511.06434, 2015.
+[146] T. Chen, X. Zhai, M. Ritter, M. Lucic, and N. Houlsby, “Selfsupervised gans via auxiliary rotation loss,” in CVPR, 2019.
+[147] J. Wang, W. Zhou, G.-J. Qi, Z. Fu, Q. Tian, and H. Li, “Transformation gan for unsupervised image synthesis and representation learning,” in CVPR, 2020.
+[148] A. Brock, J. Donahue, and K. Simonyan, “Large scale gan training for high ﬁdelity natural image synthesis,” in ICLR, 2019.
+[149] J. Donahue and K. Simonyan, “Large scale adversarial representation learning,” in NeurIPS, 2019.
+[150] X. Wang and A. Gupta, “Unsupervised learning of visual representations using videos,” in ICCV, 2015.
+[151] C. Vondrick, A. Shrivastava, A. Fathi, S. Guadarrama, and K. Murphy, “Tracking emerges by colorizing videos,” in ECCV, 2018.
+[152] I. Aganj, M. G. Harisinghani, R. Weissleder, and B. Fischl, “Unsupervised medical image segmentation based on the local center of mass,” Nature, 2018.
+[153] K. He, R. Girshick, and P. Dolla´r, “Rethinking imagenet pretraining,” in CVPR, 2019.
+[154] C. Feichtenhofer, H. Fan, B. Xiong, R. Girshick, and K. He, “A large-scale study on unsupervised spatiotemporal representation learning,” in CVPR, 2021.
+[155] S. Ren, K. He, R. Girshick, and J. Sun, “Faster r-cnn: Towards real-time object detection with region proposal networks,” IEEE TPAMI, 2016.
+[156] M. Everingham, L. Van Gool, C. K. Williams, J. Winn, and A. Zisserman, “The pascal visual object classes (voc) challenge,” IJCV, 2010.
+[157] K. He, G. Gkioxari, P. Dolla´r, and R. Girshick, “Mask r-cnn,” in CVPR, 2017.
+[158] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Dolla´r, and C. L. Zitnick, “Microsoft coco: Common objects in context,” in ECCV, 2014.
+[159] R. Santa Cruz, B. Fernando, A. Cherian, and S. Gould, “Visual permutation learning,” IEEE TPAMI, 2018.
+[160] T. Nathan Mundhenk, D. Ho, and B. Y. Chen, “Improvements to context based self-supervised learning,” in CVPR, 2018.
+[161] C. Wei, L. Xie, X. Ren, Y. Xia, C. Su, J. Liu, Q. Tian, and A. L. Yuille, “Iterative reorganization with weak spatial constraints: Solving arbitrary jigsaw puzzles for unsupervised representation learning,” in CVPR, 2019.
+[162] P. Goyal, D. Mahajan, A. Gupta, and I. Misra, “Scaling and benchmarking self-supervised visual representation learning,” in ICCV, 2019.
+[163] G. Goh, N. Cammarata, C. Voss, S. Carter, M. Petrov, L. Schubert, A. Radford, and C. Olah, “Multimodal neurons in artiﬁcial neural networks,” Distill, 2021.
+
+20
+
+[164] F. M. Carlucci, A. D’Innocente, S. Bucci, B. Caputo, and T. Tommasi, “Domain generalization by solving jigsaw puzzles,” in CVPR, 2019.
+[165] R. D. Hjelm, A. Fedorov, S. Lavoie-Marchildon, K. Grewal, P. Bachman, A. Trischler, and Y. Bengio, “Learning deep representations by mutual information estimation and maximization,” in ICLR, 2019.
+[166] P. Bachman, R. D. Hjelm, and W. Buchwalter, “Learning representations by maximizing mutual information across views,” in NeurIPS, 2019.
+[167] M. Tschannen, J. Djolonga, P. K. Rubenstein, S. Gelly, and M. Lucic, “On mutual information maximization for representation learning,” in ICLR, 2019.
+[168] Y. Tian, C. Sun, B. Poole, D. Krishnan, C. Schmid, and P. Isola, “What makes for good views for contrastive learning,” in NeurIPS, 2020.
+[169] J. Huang, Q. Dong, S. Gong, and X. Zhu, “Unsupervised deep learning by neighbourhood discovery,” in ICML, 2019.
+[170] W. Van Gansbeke, S. Vandenhende, S. Georgoulis, M. Proesmans, and L. Van Gool, “Learning to classify images without labels,” in ECCV, 2020.
+[171] M. Caron, P. Bojanowski, J. Mairal, and A. Joulin, “Unsupervised pre-training of image features on non-curated data,” in ICCV, 2019.
+[172] D. Novotny, S. Albanie, D. Larlus, and A. Vedaldi, “Selfsupervised learning of geometrically stable features through probabilistic introspection,” in CVPR, 2018.
+[173] M. Ye, X. Zhang, P. C. Yuen, and S.-F. Chang, “Unsupervised embedding learning via invariant and spreading instance feature,” in CVPR, 2019.
+[174] X. Chen, H. Fan, R. Girshick, and K. He, “Improved baselines with momentum contrastive learning,” arXiv:2003.04297, 2020.
+[175] M. Gutmann and A. Hyva¨rinen, “Noise-contrastive estimation: A new estimation principle for unnormalized statistical models,” in AISTATS, 2010.
+[176] M. Federici, A. Dutta, P. Forre´, N. Kushman, and Z. Akata, “Learning robust representations via multi-view information bottleneck,” in ICLR, 2020.
+[177] A. v. d. Oord, Y. Li, and O. Vinyals, “Representation learning with contrastive predictive coding,” arXiv:1807.03748, 2018.
+[178] J. Robinson, C.-Y. Chuang, S. Sra, and S. Jegelka, “Contrastive learning with hard negative samples,” in ICLR, 2021.
+[179] Q. Hu, X. Wang, W. Hu, and G.-J. Qi, “Adco: Adversarial contrast for efﬁcient learning of unsupervised representations from selftrained negative adversaries,” in CVPR, 2021.
+[180] X. Wang, Y. Huang, D. Zeng, and G.-J. Qi, “Caco: Both positive and negative samples are directly learnable via cooperativeadversarial contrastive learning,” arXiv:2203.14370, 2022.
+[181] J. Zbontar, L. Jing, I. Misra, Y. LeCun, and S. Deny, “Barlow twins: Self-supervised learning via redundancy reduction,” in ICML, 2021.
+[182] J. Xie, R. Girshick, and A. Farhadi, “Unsupervised deep embedding for clustering analysis,” in ICML, 2016.
+[183] W. Hu, T. Miyato, S. Tokui, E. Matsumoto, and M. Sugiyama, “Learning discrete representations via information maximizing self-augmented training,” in ICML, 2017.
+[184] C. Zhuang, A. L. Zhai, and D. Yamins, “Local aggregation for unsupervised learning of visual embeddings,” in CVPR, 2019.
+[185] X. Yan, I. Misra, A. Gupta, D. Ghadiyaram, and D. Mahajan, “Clusterﬁt: Improving generalization of visual representations,” in CVPR, 2020.
+[186] X. Wang, Z. Liu, and S. X. Yu, “Unsupervised feature learning by cross-level discrimination between instances and groups,” in CVPR, 2021.
+[187] S. Gidaris, A. Bursuc, N. Komodakis, P. Pe´rez, and M. Cord, “Learning representations by predicting bags of visual words,” in CVPR, 2020.
+[188] A. K. Jain, M. N. Murty, and P. J. Flynn, “Data clustering: a review,” CSUR, 1999.
+[189] A. Coates and A. Y. Ng, “Learning feature representations with k-means,” in Neural networks: Tricks of the trade, 2012.
+[190] U. Von Luxburg, “A tutorial on spectral clustering,” Statistics and computing, 2007.
+[191] J. Chang, L. Wang, G. Meng, S. Xiang, and C. Pan, “Deep adaptive image clustering,” in CVPR, 2017.
+[192] X. Guo, L. Gao, X. Liu, and J. Yin, “Improved deep embedded clustering with local structure preservation,” in IJCAI, 2017.
+
+[193] B. Yang, X. Fu, N. D. Sidiropoulos, and M. Hong, “Towards kmeans-friendly spaces: Simultaneous deep learning and clustering,” in ICML, 2017.
+[194] K. C. Gowda and G. Krishna, “Agglomerative clustering using the concept of mutual nearest neighbourhood,” PR, 1978.
+[195] M. Cuturi, “Sinkhorn distances: Lightspeed computation of optimal transport,” in NeurIPS, 2013.
+[196] Y. Li, P. Hu, Z. Liu, D. Peng, J. T. Zhou, and X. Peng, “Contrastive clustering,” in AAAI, 2020.
+[197] G. E. Hinton, S. Osindero, and Y.-W. Teh, “A fast learning algorithm for deep belief nets,” Neural computation, 2006.
+[198] A. Gabbay and Y. Hoshen, “Demystifying inter-class disentanglement,” in ICLR, 2020.
+[199] J. Donahue, P. Kra¨henbu¨ hl, and T. Darrell, “Adversarial feature learning,” in ICLR, 2017.
+[200] G.-J. Qi, L. Zhang, C. W. Chen, and Q. Tian, “Avt: Unsupervised learning of transformation equivariant representations by autoencoding variational transformations,” in ICCV, 2019.
+[201] L. Zhang, G.-J. Qi, L. Wang, and J. Luo, “Aet vs. aed: Unsupervised representation learning by auto-encoding transformations rather than data,” in CVPR, 2019.
+[202] X. Chen, Y. Yuan, G. Zeng, and J. Wang, “Semi-supervised semantic segmentation with cross pseudo supervision,” in CVPR, 2021.
+[203] J. Jeong, S. Lee, J. Kim, and N. Kwak, “Consistency-based semisupervised learning for object detection,” in NeurIPS, 2019.
+[204] Y. Sun, E. Tzeng, T. Darrell, and A. A. Efros, “Unsupervised domain adaptation through self-supervision,” arXiv:1909.11825, 2019.
+[205] K. Saito, D. Kim, S. Sclaroff, and K. Saenko, “Universal domain adaptation through self supervision,” in NeurIPS, 2020.
+[206] L. Yang, S. Chen, and A. Yao, “Semihand: Semi-supervised hand pose estimation with consistency,” in ICCV, 2021.
+[207] T. Kim, J. Choi, S. Choi, D. Jung, and C. Kim, “Just a few points are all you need for multi-view stereo: A novel semi-supervised learning method for multi-view stereo,” in ICCV, 2021.
+[208] H. Alwassel, D. Mahajan, B. Korbar, L. Torresani, B. Ghanem, and D. Tran, “Self-supervised learning by cross-modal audio-video clustering,” in NeurIPS, 2020.
+[209] O. Ronneberger, P. Fischer, and T. Brox, “U-net: Convolutional networks for biomedical image segmentation,” in MICCAI, 2015.
+[210] X. Huo, L. Xie, J. He, Z. Yang, W. Zhou, H. Li, and Q. Tian, “Atso: Asynchronous teacher-student optimization for semi-supervised image segmentation,” in CVPR, 2021.
+[211] H. Wu, G. Chen, Z. Wen, and J. Qin, “Collaborative and adversarial learning of focused and dispersive representations for semisupervised polyp segmentation,” in ICCV, 2021.
+[212] H. Huang, L. Lin, Y. Zhang, Y. Xu, J. Zheng, X. Mao, X. Qian, Z. Peng, J. Zhou, Y.-W. Chen et al., “Graph-bas3net: Boundaryaware semi-supervised segmentation network with bilateral graph convolution,” in ICCV, 2021.
+[213] M. Cordts, M. Omran, S. Ramos, T. Rehfeld, M. Enzweiler, R. Benenson, U. Franke, S. Roth, and B. Schiele, “The cityscapes dataset for semantic urban scene understanding,” in CVPR, 2016.
+[214] M. Yang, K. Yu, C. Zhang, Z. Li, and K. Yang, “Denseaspp for semantic segmentation in street scenes,” in CVPR, 2018.
+[215] J. Behley, M. Garbade, A. Milioto, J. Quenzel, S. Behnke, C. Stachniss, and J. Gall, “Semantickitti: A dataset for semantic scene understanding of lidar sequences,” in ICCV, 2019.
+[216] G. French, T. Aila, S. Laine, M. Mackiewicz, and G. Finlayson, “Semi-supervised semantic segmentation needs strong, highdimensional perturbations,” in BMVC, 2020.
+[217] Y. Ouali, C. Hudelot, and M. Tami, “Semi-supervised semantic segmentation with cross-consistency training,” in CVPR, 2020.
+[218] Z. Ke, D. Qiu, K. Li, Q. Yan, and R. W. Lau, “Guided collaborative training for pixel-wise semi-supervised learning,” in ECCV, 2020.
+[219] H. Hu, F. Wei, H. Hu, Q. Ye, J. Cui, and L. Wang, “Semisupervised semantic segmentation via adaptive equalization learning,” in NeurIPS, 2021.
+[220] R. Mendel, L. A. De Souza, D. Rauber, J. P. Papa, and C. Palm, “Semi-supervised segmentation based on error-correcting supervision,” in ECCV, 2020.
+[221] Y. Zou, Z. Zhang, H. Zhang, C.-L. Li, X. Bian, J.-B. Huang, and T. Pﬁster, “Pseudoseg: Designing pseudo labels for semantic segmentation,” in ICLR, 2021.
+
+21
+
+[222] M. S. Ibrahim, A. Vahdat, M. Ranjbar, and W. G. Macready, “Semisupervised semantic image segmentation with self-correcting networks,” in CVPR, 2020.
+[223] R. He, J. Yang, and X. Qi, “Re-distributing biased pseudo labels for semi-supervised semantic segmentation: A baseline investigation,” in ICCV, 2021.
+[224] J. Yuan, Y. Liu, C. Shen, Z. Wang, and H. Li, “A simple baseline for semi-supervised semantic segmentation with strong data augmentation,” in ICCV, 2021.
+[225] N. Souly, C. Spampinato, and M. Shah, “Semi supervised semantic segmentation using generative adversarial network,” in ICCV, 2017.
+[226] W.-C. Hung, Y.-H. Tsai, Y.-T. Liou, Y.-Y. Lin, and M.-H. Yang, “Adversarial learning for semi-supervised semantic segmentation,” in BMVC, 2018.
+[227] S. Mittal, M. Tatarchenko, and T. Brox, “Semi-supervised semantic segmentation with high-and low-level consistency,” IEEE TPAMI, 2021.
+[228] X. Lai, Z. Tian, L. Jiang, S. Liu, H. Zhao, L. Wang, and J. Jia, “Semi-supervised semantic segmentation with directional context-aware consistency,” in CVPR, 2021.
+[229] I. Alonso, A. Sabater, D. Ferstl, L. Montesano, and A. C. Murillo, “Semi-supervised semantic segmentation with pixel-level contrastive learning from a class-wise memory bank,” in ICCV, 2021.
+[230] Y. Zhong, B. Yuan, H. Wu, Z. Yuan, J. Peng, and Y.-X. Wang, “Pixel contrastive-consistent semi-supervised semantic segmentation,” in ICCV, 2021.
+[231] Y. Zhou, H. Xu, W. Zhang, B. Gao, and P.-A. Heng, “C3-semiseg: Contrastive semi-supervised segmentation via cross-set learning and dynamic class-balancing,” in ICCV, 2021.
+[232] S. Yun, D. Han, S. J. Oh, S. Chun, J. Choe, and Y. Yoo, “Cutmix: Regularization strategy to train strong classiﬁers with localizable features,” in ICCV, 2019.
+[233] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and S. Zagoruyko, “End-to-end object detection with transformers,” in ECCV, 2020.
+[234] T. Xiao, S. Li, B. Wang, L. Lin, and X. Wang, “Joint detection and identiﬁcation feature learning for person search,” in CVPR, 2017.
+[235] K. Qian, S. Zhu, X. Zhang, and L. E. Li, “Robust multimodal vehicle detection in foggy weather using complementary lidar and radar signals,” in CVPR, 2021.
+[236] H. Su, S. Gong, and X. Zhu, “Multi-perspective cross-class domain adaptation for open logo detection,” CVIU, 2021.
+[237] W. Feng, F. Yin, X.-Y. Zhang, and C.-L. Liu, “Semantic-aware video text detection,” in CVPR, 2021.
+[238] O. Russakovsky, L.-J. Li, and L. Fei-Fei, “Best of both worlds: human-machine collaboration for object annotation,” in CVPR, 2015.
+[239] J. Jeong, V. Verma, M. Hyun, J. Kannala, and N. Kwak, “Interpolation-based semi-supervised learning for object detection,” in CVPR, 2021.
+[240] Y.-C. Liu, C.-Y. Ma, Z. He, C.-W. Kuo, K. Chen, P. Zhang, B. Wu, Z. Kira, and P. Vajda, “Unbiased teacher for semi-supervised object detection,” in ICLR, 2021.
+[241] Q. Zhou, C. Yu, Z. Wang, Q. Qian, and H. Li, “Instant-teaching: An end-to-end semi-supervised object detection framework,” in CVPR, 2021.
+[242] M. Xu, Z. Zhang, H. Hu, J. Wang, L. Wang, F. Wei, X. Bai, and Z. Liu, “End-to-end semi-supervised object detection with soft teacher,” in ICCV, 2021.
+[243] K. Sohn, Z. Zhang, C.-L. Li, H. Zhang, C.-Y. Lee, and T. Pﬁster, “A simple semi-supervised learning framework for object detection,” arXiv:2005.04757, 2020.
+[244] Q. Yang, X. Wei, B. Wang, X.-S. Hua, and L. Zhang, “Interactive self-training with mean teachers for semi-supervised object detection,” in CVPR, 2021.
+[245] Z. Wang, Y. Li, Y. Guo, L. Fang, and S. Wang, “Data-uncertainty guided multi-phase learning for semi-supervised object detection,” in CVPR, 2021.
+[246] Z. Wang, Y. Li, Y. Guo, and S. Wang, “Combating noise: Semisupervised learning by region uncertainty quantiﬁcation,” in NeurIPS, 2021.
+[247] K. Saenko, B. Kulis, M. Fritz, and T. Darrell, “Adapting visual category models to new domains,” in ECCV, 2010.
+[248] Y. Wu, D. Inkpen, and A. El-Roby, “Dual mixup regularized learning for adversarial domain adaptation,” in ECCV, 2020.
+
+[249] G. French, M. Mackiewicz, and M. Fisher, “Self-ensembling for visual domain adaptation,” in ICLR, 2018.
+[250] Z. Deng, Y. Luo, and J. Zhu, “Cluster alignment with a teacher for unsupervised domain adaptation,” in ICCV, 2019.
+[251] F. M. Carlucci, L. Porzi, B. Caputo, E. Ricci, and S. R. Bulo, “Autodial: Automatic domain alignment layers,” in ICCV, 2017.
+[252] P. Morerio, J. Cavazza, and V. Murino, “Minimal-entropy correlation alignment for unsupervised deep domain adaptation,” in ICLR, 2018.
+[253] L. Hu, M. Kan, S. Shan, and X. Chen, “Unsupervised domain adaptation with hierarchical gradient synchronization,” in CVPR, 2020.
+[254] K. Saito, Y. Ushiku, and T. Harada, “Asymmetric tri-training for unsupervised domain adaptation,” in ICML, 2017.
+[255] K. Bousmalis, N. Silberman, D. Dohan, D. Erhan, and D. Krishnan, “Unsupervised pixel-level domain adaptation with generative adversarial networks,” in CVPR, 2017.
+[256] S. Sankaranarayanan, Y. Balaji, A. Jain, S. Nam Lim, and R. Chellappa, “Learning from synthetic data: Addressing domain shift for semantic segmentation,” in CVPR, 2018.
+[257] J. Hoffman, E. Tzeng, T. Park, J.-Y. Zhu, P. Isola, K. Saenko, A. Efros, and T. Darrell, “CyCADA: Cycle-consistent adversarial domain adaptation,” in ICML, 2018.
+[258] P. Russo, F. M. Carlucci, T. Tommasi, and B. Caputo, “From source to target and back: symmetric bi-directional adaptive gan,” in CVPR, 2018.
+[259] Z. Murez, S. Kolouri, D. Kriegman, R. Ramamoorthi, and K. Kim, “Image to image translation for domain adaptation,” in CVPR, 2018.
+[260] Y.-C. Chen, Y.-Y. Lin, M.-H. Yang, and J.-B. Huang, “Crdoco: Pixel-level domain transfer with cross-domain consistency,” in CVPR, 2019.
+[261] D. Yoo, N. Kim, S. Park, A. S. Paek, and I. S. Kweon, “Pixel-level domain transfer,” in ECCV, 2016.
+[262] A. Shrivastava, T. Pﬁster, O. Tuzel, J. Susskind, W. Wang, and R. Webb, “Learning from simulated and unsupervised images through adversarial training.” in CVPR, 2017.
+[263] J. Xu, L. Xiao, and A. M. Lo´ pez, “Self-supervised domain adaptation for computer vision tasks,” IEEE Access, 2019.
+[264] S. Bucci, A. D’Innocente, Y. Liao, F. M. Carlucci, B. Caputo, and T. Tommasi, “Self-supervised learning across domains,” IEEE TPAMI, 2020.
+[265] P. Su, S. Tang, P. Gao, D. Qiu, N. Zhao, and X. Wang, “Gradient regularized contrastive learning for continual domain adaptation,” in AAAI, 2021.
+[266] R. Wang, Z. Wu, Z. Weng, J. Chen, G.-J. Qi, and Y.-G. Jiang, “Cross-domain contrastive learning for unsupervised domain adaptation,” IEEE Transactions on Multimedia, 2022.
+[267] Q. Yu, D. Ikami, G. Irie, and K. Aizawa, “Multi-task curriculum framework for open-set semi-supervised learning,” in ECCV, 2020.
+[268] M. Augustin and M. Hein, “Out-distribution aware self-training in an open world setting,” arXiv:2012.12372, 2020.
+[269] J. Huang, C. Fang, W. Chen, Z. Chai, X. Wei, P. Wei, L. Lin, and G. Li, “Trash to treasure: Harvesting ood data with cross-modal matching for open-set semi-supervised learning,” in ICCV, 2021.
+[270] K. Saito, D. Kim, and K. Saenko, “Openmatch: Open-set consistency regularization for semi-supervised learning with outliers,” in NeurIPS, 2021.
+[271] Z. Huang, C. Xue, B. Han, J. Yang, and C. Gong, “Universal semi-supervised learning,” in Thirty-Fifth Conference on Neural Information Processing Systems, 2021.
+[272] K. Cao, M. Brbic, and J. Leskovec, “Open-world semi-supervised learning,” in ICLR, 2022.
+[273] D. Hendrycks and K. Gimpel, “A baseline for detecting misclassiﬁed and out-of-distribution examples in neural networks,” in ICLR, 2017.
+[274] Z. Zhong, L. Zhu, Z. Luo, S. Li, Y. Yang, and N. Sebe, “Openmix: Reviving known knowledge for discovering novel visual categories in an open world,” in CVPR, 2021.
+[275] D. Hendrycks, M. Mazeika, and T. Dietterich, “Deep anomaly detection with outlier exposure,” in ICLR, 2019.
+[276] K. Lee, K. Lee, H. Lee, and J. Shin, “A simple uniﬁed framework for detecting out-of-distribution samples and adversarial attacks,” in NeurIPS, 2018.
+
+22
+
+[277] M. Hein, M. Andriushchenko, and J. Bitterwolf, “Why relu networks yield high-conﬁdence predictions far away from the training data and how to mitigate the problem,” in CVPR, 2019.
+[278] J. Kim, Y. Hur, S. Park, E. Yang, S. J. Hwang, and J. Shin, “Distribution aligning reﬁnery of pseudo-label for imbalanced semi-supervised learning,” in NeurIPS, 2020.
+[279] H. Lee, S. Shin, and H. Kim, “Abc: Auxiliary balanced classiﬁer for class-imbalanced semi-supervised learning,” in NeurIPS, 2021.
+[280] K. Han, A. Vedaldi, and A. Zisserman, “Learning to discover novel visual categories via deep transfer clustering,” in ICCV, 2019.
+[281] K. Han, S.-A. Rebufﬁ, S. Ehrhardt, A. Vedaldi, and A. Zisserman, “Automatically discovering and learning new visual categories with ranking statistics,” in ICLR, 2020.
+[282] K. Lee, K. Lee, J. Shin, and H. Lee, “Overcoming catastrophic forgetting with unlabeled data in the wild,” in ICCV, 2019.
+[283] D. Rao, F. Visin, A. A. Rusu, R. Pascanu, Y. W. Teh, and R. Hadsell, “Continual unsupervised representation learning,” in NeurIPS, 2019.
+[284] M. Delange, R. Aljundi, M. Masana, S. Parisot, X. Jia, A. Leonardis, G. Slabaugh, and T. Tuytelaars, “A continual learning survey: Defying forgetting in classiﬁcation tasks,” IEEE TPAMI, 2021.
+[285] M. McCloskey and N. J. Cohen, “Catastrophic interference in connectionist networks: The sequential learning problem,” in Psychology of learning and motivation, 1989.
+[286] S.-A. Rebufﬁ, A. Kolesnikov, G. Sperl, and C. H. Lampert, “icarl: Incremental classiﬁer and representation learning,” in CVPR, 2017.
+[287] J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K. Milan, J. Quan, T. Ramalho, A. GrabskaBarwinska et al., “Overcoming catastrophic forgetting in neural networks,” PNAS, 2017.
+[288] A. Chaudhry, P. K. Dokania, T. Ajanthan, and P. H. Torr, “Riemannian walk for incremental learning: Understanding forgetting and intransigence,” in ECCV, 2018.
+[289] R. Aljundi, F. Babiloni, M. Elhoseiny, M. Rohrbach, and T. Tuytelaars, “Memory aware synapses: Learning what (not) to forget,” in ECCV, 2018.
+[290] J. Zhang, J. Zhang, S. Ghosh, D. Li, S. Tasci, L. Heck, H. Zhang, and C.-C. J. Kuo, “Class-incremental learning via deep model consolidation,” in WACV, 2020.
+[291] Y. Li, Y. Wang, Q. Liu, C. Bi, X. Jiang, and S. Sun, “Incremental semi-supervised learning on streaming data,” PR, 2019.
+[292] J. Smith, S. Baer, Z. Kira, and C. Dovrolis, “Unsupervised continual learning and self-taught associative memory hierarchies,” in ICLRW, 2019.
+[293] Y. Sun, X. Wang, Z. Liu, J. Miller, A. Efros, and M. Hardt, “Test-time training with self-supervision for generalization under distribution shifts,” in ICML, 2020.
+[294] T. Varsavsky, M. Orbes-Arteaga, C. H. Sudre, M. S. Graham, P. Nachev, and M. J. Cardoso, “Test-time unsupervised domain adaptation,” in MICCAI, 2020.
+[295] D. Wang, E. Shelhamer, S. Liu, B. Olshausen, and T. Darrell, “Tent: Fully test-time adaptation by entropy minimiaztion,” in ICLR, 2021.
+[296] J. Hoffman, T. Darrell, and K. Saenko, “Continuous manifold based adaptation for evolving visual domains,” in CVPR, 2014.
+[297] A. Bobu, E. Tzeng, J. Hoffman, and T. Darrell, “Adapting to continuously shifting domains,” in ICLRW, 2018.
+[298] E. Arazo, D. Ortego, P. Albert, N. E. O’Connor, and K. McGuinness, “Pseudo-labeling and conﬁrmation bias in deep semisupervised learning,” in IJCNN, 2020.
+[299] J. Lu, D. Batra, D. Parikh, and S. Lee, “Vilbert: Pretraining taskagnostic visiolinguistic representations for vision-and-language tasks,” in NeurIPS, 2019.
+[300] H. Tan and M. Bansal, “Lxmert: Learning cross-modality encoder representations from transformers,” in ACL, 2019.
+[301] W. Su, X. Zhu, Y. Cao, B. Li, L. Lu, F. Wei, and J. Dai, “Vl-bert: Pre-training of generic visual-linguistic representations,” in ICLR, 2019.
+[302] Y.-C. Chen, L. Li, L. Yu, A. El Kholy, F. Ahmed, Z. Gan, Y. Cheng, and J. Liu, “Uniter: Universal image-text representation learning,” in ECCV, 2020.
+
+[303] G. Li, N. Duan, Y. Fang, M. Gong, D. Jiang, and M. Zhou, “Unicoder-vl: A universal encoder for vision and language by cross-modal pre-training.” in AAAI, 2020.
+[304] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in NeurIPS, 2017.
+[305] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert: Pretraining of deep bidirectional transformers for language understanding,” in ACL, 2019.
+[306] C. Sun, A. Myers, C. Vondrick, K. Murphy, and C. Schmid, “Videobert: A joint model for video and language representation learning,” in ICCV, 2019.
+[307] J. C. Stroud, D. A. Ross, C. Sun, J. Deng, R. Sukthankar, and C. Schmid, “Learning video representations from textual web supervision,” arXiv:2007.14937, 2020.
+[308] J.-B. Alayrac, A. Recasens, R. Schneider, R. Arandjelovic´, J. Ramapuram, J. De Fauw, L. Smaira, S. Dieleman, and A. Zisserman, “Self-supervised multimodal versatile networks,” in NeurIPS, 2020.
+[309] A. Miech, J.-B. Alayrac, L. Smaira, I. Laptev, J. Sivic, and A. Zisserman, “End-to-end learning of visual representations from uncurated instructional videos,” in CVPR, 2020.
+[310] A. Rouditchenko, A. Boggust, D. Harwath, D. Joshi, S. Thomas, K. Audhkhasi, R. Feris, B. Kingsbury, M. Picheny, A. Torralba et al., “Avlnet: Learning audio-visual language representations from instructional videos,” arXiv:2006.09199, 2020.
+[311] A. Miech, D. Zhukov, J.-B. Alayrac, M. Tapaswi, I. Laptev, and J. Sivic, “Howto100m: Learning a text-video embedding by watching hundred million narrated video clips,” in ICCV, 2019.
+[312] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al., “Learning transferable visual models from natural language supervision,” in ICML, 2021.
+[313] C. Jia, Y. Yang, Y. Xia, Y.-T. Chen, Z. Parekh, H. Pham, Q. V. Le, Y. Sung, Z. Li, and T. Duerig, “Scaling up visual and visionlanguage representation learning with noisy text supervision,” in ICML, 2021.
+[314] R. Arandjelovic and A. Zisserman, “Look, listen and learn,” in CVPR, 2017.
+[315] A. Owens and A. A. Efros, “Audio-visual scene analysis with self-supervised multisensory features,” in ECCV, 2018.
+[316] B. Korbar, D. Tran, and L. Torresani, “Cooperative learning of audio and video models from self-supervised synchronization,” in NeurIPS, 2018.
+[317] P. Morgado, N. Vasconcelos, and I. Misra, “Audio-visual instance discrimination with cross-modal agreement,” in CVPR, 2021.
+[318] M. Patrick, Y. M. Asano, R. Fong, J. F. Henriques, G. Zweig, and A. Vedaldi, “Multi-modal self-supervision from generalized data transformations,” arXiv:2003.04298, 2020.
+[319] A. Owens, J. Wu, J. H. McDermott, W. T. Freeman, and A. Torralba, “Ambient sound provides supervision for visual learning,” in ECCV, 2016.
+[320] P. Hu, H. Zhu, X. Peng, and J. Lin, “Semi-supervised multi-modal learning with balanced spectral decomposition,” in AAAI, 2020.
+[321] S. Li, B. Xie, J. Wu, Y. Zhao, C. H. Liu, and Z. Ding, “Simultaneous semantic alignment network for heterogeneous domain adaptation,” in ACM MM, 2020.
+[322] Y. Chen, Y. Xian, A. S. Koepke, Y. Shan, and Z. Akata, “Distilling audio-visual knowledge by compositional contrastive learning,” in CVPR, 2021.
+

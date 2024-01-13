@@ -1,0 +1,686 @@
+Modeling Relationships in Referential Expressions with Compositional Modular Networks
+Ronghang Hu1 Marcus Rohrbach1 Jacob Andreas1 Trevor Darrell1 Kate Saenko2 1University of California, Berkeley 2Boston University
+{ronghang,rohrbach,jda,trevor}@eecs.berkeley.edu, saenko@bu.edu
+
+arXiv:1611.09978v1 [cs.CV] 30 Nov 2016
+
+Abstract
+People often refer to entities in an image in terms of their relationships with other entities. For example, the black cat sitting under the table refers to both a black cat entity and its relationship with another table entity. Understanding these relationships is essential for interpreting and grounding such natural language expressions. Most prior work focuses on either grounding entire referential expressions holistically to one region, or localizing relationships based on a ﬁxed set of categories. In this paper we instead present a modular deep architecture capable of analyzing referential expressions into their component parts, identifying entities and relationships mentioned in the input expression and grounding them all in the scene. We call this approach Compositional Modular Networks (CMNs): a novel architecture that learns linguistic analysis and visual inference end-to-end. Our approach is built around two types of neural modules that inspect local regions and pairwise interactions between regions. We evaluate CMNs on multiple referential expression datasets, outperforming state-of-the-art approaches on all tasks.
+
+input image
+
+candidate regions
+
+input expression the woman holding a grey umbrella
+expression parsing with attention subj: the woman holding a grey umbrella
+rel: the woman holding a grey umbrella obj: the woman holding a grey umbrella
+
+qsubj
+
+qrel
+
+qobj
+
+localization relationship localization
+
+module
+
+module
+
+module
+
+subject scores (unary)
+
+relationship scores
+(pairwise)
+
+object scores (unary)
+
+final scores on region pairs
+
+...
+region pairs
+( , ) ( , ) ( , )
+...
+output top region pair
+
+1. Introduction
+Great progress has been made on object detection, the task of localizing visual entities belonging to a pre-deﬁned set of categories [8, 24, 23, 6, 17]. But the more general and challenging task of localizing entities based on arbitrary natural language expressions remains far from solved. This task, sometimes known as grounding or referential expression comprehension, has been explored by recent work in both computer vision and natural language processing [20, 11, 25]. Given an image and a natural language expression referring to a visual entity, such as the young man wearing green shirt and riding a black bicycle, these approaches localize the image region corresponding to the entity that the expression refers to with a bounding box.
+Referential expressions often describe relationships be-
+
+Figure 1. Given an image and an expression, we learn to parse the expression into vector representation of subject qsubj, relationship qrel and object qobj with attention, and align these textual components to image regions with two types of modules. The localization module outputs scores over each individual region while the relationship module produces scores over region pairs. These outputs are integrated into ﬁnal scores over region pairs, producing the top region pair as grounding result. (Best viewed in color.)
+tween multiple entities in an image. In Figure 1, for example, the expression the woman holding a grey umbrella describes a woman entity that participates in a holding relationship with a grey umbrella entity. Because there are multiple women in the image, resolving this referential expression requires both ﬁnding a bounding box that contains a person, and ensuring that this bounding box relates in the
+
+right way to other objects in the scene. Previous work on grounding referential expressions either (1) treats referential expressions holistically, thus failing to model explicit correspondence between textual components and visual entities in the image [20, 11, 25, 30, 21], or else (2) relies on a ﬁxed set of entity and relationship categories deﬁned a priori [18].
+In this paper, we present a joint approach that explicitly models the compositional linguistic structure of referential expressions and their groundings, but which nonetheless supports interpretation of arbitrary language. We focus on referential expressions involving inter-object relationships that can be represented as a subject entity, a relationship and an object entity. We propose Compositional Modular Networks (CMNs), an end-to-end trained model that learns language representation and image region localization jointly as shown in Figure 1. Our model differentiably parses the referential expression into a subject, relationship and object with three soft attention maps, and aligns the extracted textual representations with image regions using a modular neural architecture. There are two types of modules in our model, one used for localizing speciﬁc textual components by outputting unary scores over regions for that component, and one for determining the relationship between two pairs of bounding boxes by outputting pairwise scores over region-region pairs. We evaluate our model on multiple datasets containing referential expressions, and show that our model outperforms both natural baselines and previous work.
+2. Related work
+Grounding referential expressions. The problem of grounding referential expressions can be naturally formulated as a retrieval problem over image regions [20, 11, 25, 7, 30, 21]. First, a set of candidate regions are extracted (e.g. via object proposal methods like [28, 4, 13, 33]). Next, each candidate region is scored by a model with respect to the query expression, returning the highest scoring candidate as the grounding result. In [20, 11], each region is scored based on its local visual features and some global contextual features from the whole image. However, local visual features and global contextual from the whole image are often insufﬁcient to determine whether a region matches an expression, as relationships with other regions in the image must also be considered. Two recent methods [30, 21] go beyond local visual features in a single region, and consider multiple regions at the same time. [30] adds contextual feature extracted from other regions in the image, and [21] proposes a model that grounds a referential expression into a pair of regions. All these methods represent language holistically using a recurrent neural network: either generatively, by predicting a distribution over referential expressions [20, 11, 30, 21], or discriminatively, by encoding ex-
+
+pressions into a vector representation [25, 7]. This makes it difﬁcult to learn explicit correspondences between the components in the textual expression and entities in the image. In this work, we learn to parse the language expression into textual components in instead of treating it as a whole, and align these components with image regions end-to-end.
+Handling inter-object relationships. Recently work by [18] trains detectors based on RCNN [8] and uses a linguistic prior to detect visual relationships. However, this work relies on ﬁxed, predeﬁned categories for subjects, relations, and objects, treating entities like “bicycle” and relationships like and “riding” as discrete classes. Instead of building upon a ﬁxed inventory of classes, our model handles relationships speciﬁed by arbitrary natural language phrases, and jointly learns expression parsing and visual entity localization. Although [15] also learns language parsing and perception, it is directly based on logic (λ-calculus) and requires additional classiﬁers trained for each predicate class.
+Compositional structure with modules. Neural Module Networks [3] address visual question answering by decomposing the questions into textual components and dynamically assembling a speciﬁc network architecture for the question from a few network modules based on the textual components. However, this method relies on an external language parser for textual analysis instead of end-to-end learned language representation, and is not directly applicable to the task of grounding referential expressions into bounding boxes, since it does not explicitly output bounding boxes as results. Recently, [2] improves over [3] by learning to re-rank parsing outputs from the external parser, but it is still not end-to-end learned since the parser is ﬁxed and not optimized for the task. Inspired by [3], our model also uses a modular structure, but learns the language representation end-to-end from words.
+3. Our model
+We propose Compositional Modular Networks (CMNs) to localize visual entities described by a query referential expression. Our model is compositional in the sense that it localizes a referential expression by grounding the components in the expressions and exploiting their interactions, in accordance with the principle of compositionality of natural language – the meaning of a complex expression is determined by the meanings of its constituent expressions and the rules used to combine them [29]. Our model works in a retrieval setting: given an image I, a referential expression Q as query and a set of candidate region bounding boxes B = {bi} for the image I (e.g. extracted through object proposal methods), our model outputs a score for each bounding box bi, and returns the bounding box with the highest score as grounding (localization) result. Unlike state-of-theart methods [25, 7], the scores for each region bounding box bi ∈ B are not predicted only from the local feature of bi,
+
+word sequence {wt}
+the man riding a black bicycle
+
+word embedding sequence {et} 2-layer bidirectional LSTM
+
+concatenated state {ht}
+
+fully connected
+layer 1 softmax
+
+fully connected
+layer 2 softmax
+
+fully connected
+layer 3 softmax
+
+three attention weights over each word
+
+{at,subj}, {at,rel}, {at,obj}
+
+subject
+
+{at,subj}: the man riding a black bicycle
+
+relationship {at,rel }: the man riding a black bicycle
+
+object
+
+{at,obj }: the man riding a black bicycle
+
+weighted average
+
+qsubj
+
+qrel
+
+qobj
+
+(a) language representation
+
+image region b
+
+language representation of subject or object
+qloc
+
+CNN
+
+local visual feature
+
+local spatial feature
+
+concatenate
+
+fully connected layer
+
+element-wise multiplication l2-normalization
+
+fully connected layer
+
+output unary score sloc
+(b) localization module
+
+image region b1
+
+image region b2
+
+language representation of relationship
+qrel
+
+b1 local spatial feature
+
+b2 local spatial feature
+
+concatenate fully connected layer
+
+element-wise multiplication l2-normalization
+
+fully connected layer
+output pairwise score srel
+(c) relationship module
+
+Figure 2. Detailed illustration of our model. (a) Our model learns to parse an expression into subject, relationship and object with attention for language representation (Sec. 3.1). (b) The localization module matches subject or object with each image region and returns a unary score (Sec. 3.2). (c) The relationship module matches a relationship with a pair of regions and returns a pairwise score (Sec. 3.3).
+
+but also based on other regions in the image. In our model, we focus on the relationships in referential expressions that can be represented as a 3-component triplet (subject, relationship, object), and learn to parse the expressions into these components with attention. For example, a young man wearing a blue shirt can be parsed as the triplet (a young man, wearing, a blue shirt). The score of a region is determined by simultaneously looking at whether it matches the description of the subject entity and whether it matches the relationship with another interacting object entity mentioned in the expression.
+Our model handles such inter-object relationships by looking at pairs of regions (bi, bj). For referential expressions like “the red apple on top of the bookshelf”, we want to ﬁnd a region pair (bi, bj) such that bi matches the subject entity “red apple” and bj matches the object entity “bookshelf” and the conﬁguration of (bi, bj) matches the relationship “on top of”. To achieve this goal, our model is based on a compositional modular structure, composed of two modules assembled in a pipeline for different sub-tasks: one localization module floc(·, qloc; Θloc) for deciding whether a region matches the subject or object in the expression, where qloc is the textual vector representation of the subject component “red apple” or the object component “bookshelf”, and one relationship module frel(·, ·, qrel; Θrel) for deciding whether a pair of regions matches the relationship described in the expression represented by qrel, the textual vector representation of the relationship “on top of”. The representations qsubj, qrel and qobj are learned jointly in our model in Sec. 3.1.
+We deﬁne the pairwise score spair(bi, bj) over a pair of
+
+image regions (bi, bj) matching an input referential expression Q as the sum of three components:
+
+spair(bi, bj ) = floc(bi, qsubj ; Θloc)
+
++ floc(bj , qobj ; Θloc)
+
+(1)
+
++ frel(bi, bj , qrel; Θrel),
+
+where qsubj, qobj and qrel are vector representations of subject, relationship and object, respectively.
+For inference, we deﬁne the ﬁnal subject unary score ssubj(bi) of a bounding of bi corresponding to the subject (e.g. “the red apple” in “the red apple on top of the bookshelf”) as the score of the best possible pair (bi, bj) that matches the entire expression:
+
+ssubj (bi) max spair(bi, bj ).
+
+(2)
+
+bj ∈B
+
+The subject is ultimately grounded (localized) to the highest scoring region as
+
+b∗subj = arg max(ssubj (bi)).
+
+(3)
+
+bi ∈B
+
+3.1. Expression parsing with attention
+
+Given a referential expression Q like the tall woman carrying a red bag, how can we decide which substrings corresponds to the subject, the relationship, and the object, and extract three vector representations qsubj, qrel and qobj corresponding to these three components? One possible approach is to use an external language parser to parse the referential expression into the triplet format (subject,
+
+relationship, object) and then process each com-
+ponent with an encoder (e.g. a recurrent neural network) to
+extract qsubj, qrel and qobj. However, the formal representations of language produced by syntactic parsers do not al-
+ways correspond to intuitive visual representations. As a
+simple example, the apple on top of the bookshelf is ana-
+lyzed [31] as having a subject phrase the apple, a relation-
+ship on, and an object phrase top of the bookshelf, when
+in fact the visually salient objects are simply the apple and
+the bookshelf, while the complete expression on top of de-
+scribes the relationship between them.
+Therefore, in this work we learn to decompose the input
+expression Q into the above 3 components, and generate
+vector representations qsubj, qrel and qobj from Q through a soft attention mechanism over the word sequence, as shown
+in Figure 2 (a). For a referential expression Q that is a sequence of T words {wt}Tt=1, we ﬁrst embed each word wt to a vector et using GloVe [22], and then scan through the word embedding sequence {et}Tt=1 with a 2-layer bidirectional LSTM network [26]. The ﬁrst layer takes as in-
+put the sequence {et} and outputs a forward hidden state h(t1,fw) and a backward hidden state h(t1,bw) at each time step, which are concatenated into h(t1). The second layer then takes the ﬁrst layer’s output sequence {h(t1)} as input and outputs forward and backward hidden states ht(2,fw) and h(t2,bw) at each time step. All the hidden states in the ﬁrst layer and second layer are concatenated into a single
+vector ht.
+
+ht = h(t1,f w) h(t1,bw) h(t2,f w) h(t2,bw)
+
+(4)
+
+The concatenated state ht contains information from word wt itself and also context from words before and after wt. Then the attention weights at,subj , at,rel and at,obj for subject, relationship, object over each word wt are obtained by three linear predictions over ht followed by a softmax as
+
+exp βsTubj ht
+
+at,subj =
+
+T τ =1
+
+exp
+
+βsTubj hτ
+
+(5)
+
+at,rel =
+
+exp βrTelht
+
+T τ =1
+
+exp
+
+βrTelhτ
+
+(6)
+
+exp βoTbj ht
+
+at,obj =
+
+T τ =1
+
+exp
+
+βoTbj hτ
+
+(7)
+
+and the language representations of the subject qsubj, relationship qrel and object qobj are extracted as weighed average of word embedding vectors {et} with attention weights,
+
+as follows:
+
+T
+
+qsubj =
+
+at,subj et
+
+t=1
+
+T
+
+qrel =
+
+at,relet
+
+t=1
+
+T
+
+qobj =
+
+at,obj et.
+
+t=1
+
+(8) (9) (10)
+
+In our implementation, both the forward and the backward LSTM in each layer of the bi-directional LSTM network have 1000-dimensional hidden states, so the ﬁnal ht is 4000-dimensional. During training, dropout is added on top of ht as regularization.
+
+3.2. Localization module
+
+As shown in Figure 2 (b), the localization module floc
+
+outputs a score sloc = floc(b, qloc; Θloc) representing how
+
+likely a region bounding box b matches qloc, which is either
+
+the subject textual vector qsubj in Eqn. 8 or object textual
+
+vector qobj in Eqn. 10.
+
+This module takes the local visual feature xvis and spa-
+
+tial feature xspatial of image region b. We extract visual
+
+feature xv from image region b using a convolutional neu-
+
+ral network [27], and extract a 5-dimensional spatial feature
+
+xs
+
+=
+
+[
+
+xmin WI
+
+,
+
+, ymin
+HI
+
+, xmax
+WI
+
+, ymax
+HI
+
+Sb SI
+
+]
+
+from
+
+b
+
+using
+
+the
+
+same
+
+representation as in [20], where [xmin, ymin, xmax, ymax]
+
+and Sb are bounding box coordinates and area of b, and WI ,
+
+HI and SI are width, height and area of the image I. Then,
+
+xv and xs are concatenated into a vector xv,s = [xv xs] as
+
+representation of region b.
+
+Since element-wise multiplication is shown to be a pow-
+
+erful way to combine representations from different modal-
+
+ities [5], we adopt it here to obtain a joint vision and lan-
+
+guage representation. In our implementation, xv,s is ﬁrst
+
+embedded to a new vector x˜v,s that has the same dimen-
+
+sion as qloc (which is either qsubj in Eqn. 8 or qobj in
+
+Eqn. 10) through a linear transform, and then element-wise
+
+multiplied with qloc to obtain a vector zloc, which is L2-
+
+normalized into zˆloc to obtain a more robust representation,
+
+as follows:
+
+x˜v,s = Wv,sxv,s + bv,s
+
+(11)
+
+zloc = x˜v,s qloc
+
+(12)
+
+zˆloc = zloc/ zloc 2
+
+(13)
+
+where is element-wise multiplication between two vectors. Then the score sloc is predicted linearly from zˆloc as
+
+sloc = wlToczˆloc + bloc.
+
+(14)
+
+The parameters in Θloc are (Wv,s, bv,s, wloc, bloc).
+
+3.3. Relationship module
+As shown in Figure 2 (c), the relationship module frel outputs a score srel = frel(b1, b2, qrel; Θrel) representing how likely a pair of region bounding boxes (b1, b2) matches qrel, the representation of relationship in the expression.
+In our implementation, we use the spatial features xs1 and xs2 of the two regions b1 and b2 extracted in the same way as in localization module (we empirically ﬁnd that adding visual features of b1 and b2 leads to no noticeable performance boost while slowing training signiﬁcantly). Then xs1 and xs2 are concatenated as xs1,s2 = [xs1 xs2], and then processed in a similar way as in localization module to obtain srel, as shown below:
+
+x˜s1,s2 = Ws1,s2xs1,s2 + bs1,s2 zrel = x˜s1,s2 qrel zˆrel = zrel/ zrel 2 srel = wrTelzˆrel + brel.
+
+(15) (16) (17) (18)
+
+The parameters in Θrel are (Ws1,s2, bs1,s2, wrel, brel).
+3.4. End-to-end learning
+During training, for an image I, a referential expression Q and a set of candidate regions B extracted from I, if the ground-truth regions bsubj gt of the subject entity and bobj gt of the object entity are both available, then we can optimize the pairwise score spair in Eqn. 1 with strong supervision using softmax loss Lossstrong.
+
+Lossstrong = − log
+
+exp (spair(bsubj gt, bobj gt))
+(bi,bj)∈B×B exp (spair(bi, bj )) (19)
+
+However, it is often hard to obtain ground-truth regions for
+
+both subject entity and object entity. For referential expres-
+
+sions like “a red vase on top of the table”, often there is only
+
+a ground-truth bounding box annotation b1 for the subject
+
+(vase) in the expression, but no bounding box annotation b2
+
+for the object (table), so one cannot directly optimize the
+
+pairwise score spair(b1, b2). To address this issue, we treat
+
+the object region b2 as a latent variable, and optimize the
+
+unary score ssubj(b1) in Eqn. 2. Since ssubj(b1) is ob-
+
+tained by maximizing over all possible region b2 ∈ B in
+
+spair(b1, b2), this can be regarded as a weakly supervised
+
+Multiple Instance Learning (MIL) approach similar to [21].
+
+The unary score ssubj can be optimized with weak supervi-
+
+sion using softmax loss Lossweak.
+
+Lossweak = − log
+
+exp (ssubj (bsubj gt)) bi∈B exp (ssubj (bi))
+
+(20)
+
+The whole system is trained end-to-end with backpropagation. In our experiments, we train for 300000 iterations,
+
+Method
+
+Accuracy
+
+baseline (loc module) 46.27%
+
+our full model
+
+99.99%
+
+Table 1. Accuracy of our model and the baseline on the synthetic shape dataset. See Sec. 4.1 for details.
+
+expression=“the green square right of a red circle”
+
+baseline - sloc
+
+ssubj
+
+sobj
+
+(a)
+
+(b)
+
+(c)
+
+(d)
+
+Figure 3. For the image in (a) and the expression “the green square right of a red circle”, (b) baseline scores on each location on the 5 by 5 grid using localization module only (darker is higher), and (c, d) scores ssubj and sobj using our full model. ssubj is highest on the exact green square that is on the right of a red circle, and sobj is highest on this red circle.
+
+with 0.95 momentum and an initial learning rate of 0.005, multiplied by 0.1 after every 120000 iterations. Each batch contains one image with all referential expressions annotated over that image. Parameters in the localization module, the relationship module and the language representation in our model are initialized randomly with Xavier initializer [9]. Our model is implemented using TensorFlow [1] and we plan to release our code and data to facilitate reproduction of our results.
+4. Experiments
+We ﬁrst evaluate our model on a synthetic dataset to verify its ability to handle inter-object relationships in referential expressions. Next we apply our method to real images and expressions in the Visual Genome dataset [14] and Google-Ref dataset [20]. Since the task of answering pointing questions in visual question answering is similar to grounding referential expressions, we also evaluate our model on the pointing questions in the Visual-7W dataset [32].
+4.1. Analysis on a synthetic dataset
+Inspired by [3], we ﬁrst perform a simulation experiment on a synthetic shape dataset. The dataset consists of 30000 images with simple circles, squares and triangles of different sizes and colors on a 5 by 5 grid, and referential expressions constructed using a template of the form [subj] [relationship] [obj], where [subj] and [obj] involve both shape classes and attributes and [relationship] is some spatial relationships such as “above”. The task is to localize the corresponding shape region described by the expression on the
+
+5 by 5 grid. Figure 3 (a) shows an example in this dataset with the synthetic expression “the green square right of a red circle”. In the synthesizing procedure, we make sure that the shape region being referred to cannot be inferred simply from [subj] as there will be multiple matching regions, and the relationship with another region described by [obj] has to be taken into consideration.
+On this dataset, we train our model with weak supervision by Eqn. 20 using the ground-truth subject region bsubj gt of the subject shape described in the expression. Here the candidate region set B are the 25 possible locations on the 5 by 5 grid, and visual features are extracted from the corresponding cropped image region with a VGG16 network [27] pretrained on ImageNET classiﬁcation. As a comparison, we also train a baseline model using only the localization module, with a softmax loss on its output sloc in Eqn. 14 over all 25 locations on the grid, and language representation qloc obtained by scanning through the word embedding sequence with a single LSTM network and taking the hidden state at the last time step same as in [25, 10]. This baseline method resembles the supervised version of GroundeR [25], and the main difference between this baseline and our model is that the baseline only looks at a region’s appearance and spatial property but ignores pairwise relationship with other regions.
+We evaluate with the accuracy on whether the predicted subject region b∗subj matches the ground-truth region bsubj gt. Table 1 shows the results on this dataset, where our model trained with weak supervision (the same as the supervision given to baseline) achieves nearly perfect accuracy— signiﬁcantly outperforming the baseline using a localization module only. Figure 3 shows an example, where the baseline can localize green squares but fails to distinguish the exact green square right of a red circle, while our model successfully ﬁnds the subject-object pair, although it has never seen the ground-truth location for the object entity during training.
+4.2. Localizing relationships in Visual Genome
+We also evaluate our method on the Visual Genome dataset [14], which contains relationship expressions annotated over pairs of objects, such as “computer on top of table” and “person wearing shirt”.
+On the relationship annotations in Visual Genome, given an image and an expression like “man wearing hat”, we evaluate our method in two test scenarios: retrieving the subject region (“man”) and retrieving the subject-object pair (both “man” and “hat”). In our experiment, we take the bounding boxes of all the annotated entities in each image (around 35 per image) as candidate region set B at both training and test time, and extract visual features for each region from fc7 output of a Faster-RCNN VGG-16 network [24] pretrained on MSCOCO detection dataset [16]. The
+
+Method baseline baseline our full model our full model
+
+training supervision subject-GT
+subject-object-GT subject-GT
+subject-object-GT
+
+P@1-subj 41.20%
+43.81% 44.24%
+
+P@1-pair -
+23.37% 26.56% 28.52%
+
+Table 2. Performance of our model on relationship expressions in Visual Genome dataset. See Sec. 4.2 for details.
+
+input images are ﬁrst forwarded through the convolutional layers of the network, and the features of each image region are extracted by ROI-pooling over the convolutional feature map, followed by subsequent fully connected layers. We use the same training, validation and test split as in [12].
+Since there are ground-truth annotations for both subject region and object region in this dataset, we experiment with two training supervision settings: (1) weak supervision by only providing the ground-truth region of the subject entity at training time (subject-GT in Table 2) and optimizing unary subject score ssubj with Eqn. 20 and (2) strong supervision by providing the ground-truth region pair of both subject and object entities at training time (subject-objectGT in Table 2) and optimizing pairwise score spair with Eqn. 19.
+Similar to the experiment on the synthetic dataset in Sec. 4.1, we also train a baseline model that only looks at local appearance and spatial properties but ignores pairwise relationships. For the ﬁrst evaluation scenario of retrieving the subject region, we train a baseline model using a localization module only by optimizing its output sloc for groundtruth subject region with softmax loss (the same training supervision as subject-GT). For the second scenario of retrieving the subject-object pair, we train two such baseline models optimized with subject ground-truth and object groundtruth respectively, to localize of the subject region and object region separately with each model and at test time combine the predicted subject region and predicted object region from each model be the subject-object pair (same training supervision as subject-object-GT).
+We evaluate with top-1 precision (P@1), which is the percentage of test instances where the top scoring prediction matches the ground-truth in each image (P@1-subj for predicted subject regions matching subject ground-truth in the ﬁrst scenario, and P@1-pair for predicted subject and object regions both matching the ground-truth in the second scenario). The results are summarized in Table 2, where it can be seen that our full model outperforms the baseline using only localization modules in both evaluation scenarios. Note that in the second evaluation scenario of retrieving subject-object pairs, our weakly supervised model still outperforms the baseline trained with strong supervision.
+Figure 4 shows some examples of our model trained with weak supervision (subject-GT) and attention weights
+
+ground-truth
+
+our prediction attention weights
+
+expression=“tennis player wears shorts”
+
+ground-truth
+
+our prediction attention weights
+
+expression=“building behind bus”
+
+expression=“car has tail light”
+
+expression=“window on front of building”
+
+expression=“business name on sign”
+
+expression=“board on top of store”
+
+expression=“wine bottle next to glasses”
+
+expression=“chairs around table”
+
+expression=“marker on top of ledge”
+
+expression=“chair next to table”
+
+Figure 4. Visualization of grounded relationship expressions in the Visual Genome dataset, trained with weak supervision (subject-GT). In each example, the ﬁrst and the second column show ground-truth region pairs and our predicted region pairs respectively (subject in red solid box and object in green dashed box). The third column visualizes attention weights in Eqn. 5–7 for subject, relationship and object (darker is higher).
+
+in Eqn. 5–7. It can be seen that even with weak supervision, our model still generates reasonable attention weights over words for subject, relationship and object.
+4.3. Grounding referential expressions in images
+We apply our model to the Google-Ref dataset [20], a benchmark dataset for grounding referential expressions. As this dataset does not explicitly contain subject-object pair annotation for the referential expressions, we train our model with weak supervision (Eqn. 20) by optimizing the subject score ssubj using the expression-level region ground-truth. The candidate bounding box set B at both training and test time are all the annotated entities in the image (which is the “Ground-Truth” evaluation setting in [20]). As in Sec. 4.2, fc7 output of a MSCOCO-pretrained
+
+Method Mao et al. [20] Yu et al. [30] Nagaraja et al. [21] baseline (loc module) our model (w/ external parser) our full model
+
+P@1 60.7% 64.0% 68.4% 66.5% 53.5% 69.3%
+
+Table 3. Top-1 precision of our model and previous methods on Google-Ref dataset. See Sec. 4.3 for details.
+
+Faster-RCNN VGG-16 network is used for visual feature extraction. Similar to Sec. 4.1, we also train a GroundeRlike [25] baseline model with localization module which looks only at a region’s local features.
+
+Method Zhu et al. [32] baseline (loc module) our model (w/ external parser) our full model
+
+Accuracy 56.10% 71.61% 61.66% 72.53%
+
+Table 4. Accuracy of our model and previous methods on the pointing questions in Visual-7W dataset. See Sec. 4.4 for details.
+
+In addition, instead of learning a linguistic analysis endto-end as in Sec. 3.1, we also experiment with parsing the expression using the Stanford Parser [31, 19]. An expression is parsed into subject, relationship and object component according to the constituency tree, and the components are encoded into vectors qsubj, qrel and qobj using three separate LSTM encoders, similar to the baseline and [25].
+Following [20], we evaluate on this dataset using the top-1 precision (P@1) metric, which is the fraction of the highest scoring subject region matching the ground-truth for the expression. Table 3 shows the performance of our model, baseline model and previous work. Note that all the methods are trained with the same weak supervision (only a ground-truth subject region). It can be seen that by incorporating inter-object relationships, our full model outperforms the baseline using only localization modules, and works better than previous state-of-the-art methods.
+Additionally, replacing the learned expression parsing and language representation in Sec. 3.1 with an external parser (“our model w/ external parser” in Table 3) leads to a signiﬁcant performance drop. We ﬁnd that this is mainly because existing parsers are not speciﬁcally tuned for the referring expression task—as noted in Sec. 3.1, expressions like chair on the left of the table are parsed as (chair, on, the left of the table) rather than the desired triplet (chair, on the left of, the table). In our full model, the language representation is end-to-end optimized with other parts, while it is hard to jointly optimize an external language parser like [31] for this task.
+Figure 5 shows some example results on this dataset. It can be seen that although weakly supervised, our model not only grounds the subject region correctly (solid box), but also ﬁnds reasonable regions (dashed box) for the object entity.
+4.4. Answering pointing questions in Visual-7W
+Finally, we evaluate our method on the multiple choice pointing questions (i.e. “which” questions) in visual question answering on the Visual-7W dataset [32]. Given an image and a question like “which tomato slice is under the knife”, the task is to select the corresponding region from a few choice regions (4 choices in this dataset) as answer. Since this task is closely related to grounding referential expressions, our model can be trained in the same way as in
+
+Sec. 4.3 to score each choice region using subject score ssubj and pick the highest scoring choice as answer.
+As before, we train our model with weak supervision through Eqn. 20 and use a MSCOCO-pretrained FasterRCNN VGG-16 network for visual feature extraction. Here we use two different candidate bounding box sets Bsubj and Bobj of the subject regions (the choices) and the object regions, where Bsubj is the 4 choice bounding boxes, and Bobj is the set of 300 proposal bounding boxes extracted using RPN in Faster-RCNN [24]. Similar to Sec. 4.3, we also train a baseline model using only a localization module to score each choice based only on its local appearance and spatial properties, and a truncated model that uses the Stanford parser [31, 19] for expression parsing and language representation.
+The results are shown in Table 4. It can be seen that our full model outperforms the baseline and the truncated model with an external parser, and achieves much higher accuracy than previous work [32]. Figure 6 shows some question answering examples on this dataset.
+5. Conclusion
+We have proposed Compositional Modular Networks, a novel end-to-end trainable model for handling relationships in referential expressions. Our model learns to parse input expressions with soft attention, and incorporates two types of modules that consider a region’s local features and pairwise interaction between regions respectively. The model induces intuitive linguistic and visual analyses of referential expressions from only weak supervision, and experimental results demonstrate that our approach outperforms both natural baselines and state-of-the-art methods on multiple datasets.
+Acknowledgements
+This work was supported by DARPA, AFRL, DoD MURI award N000141110688, NSF awards IIS-1427425, IIS-1212798 and IIS-1212928, NGA and the Berkeley Artiﬁcial Intelligence Research (BAIR) Lab. Jacob Andreas is supported by a Facebook graduate fellowship and a Huawei / Berkeley AI fellowship.
+References
+[1] M. Abadi, A. Agarwal, P. Barham, E. Brevdo, Z. Chen, C. Citro, G. S. Corrado, A. Davis, J. Dean, M. Devin, S. Ghemawat, I. Goodfellow, A. Harp, G. Irving, M. Isard, Y. Jia, R. Jozefowicz, L. Kaiser, M. Kudlur, J. Levenberg, D. Mane´, R. Monga, S. Moore, D. Murray, C. Olah, M. Schuster, J. Shlens, B. Steiner, I. Sutskever, K. Talwar, P. Tucker, V. Vanhoucke, V. Vasudevan, F. Vie´gas, O. Vinyals, P. Warden, M. Wattenberg, M. Wicke, Y. Yu, and X. Zheng. TensorFlow: Large-scale machine learning on heterogeneous systems. arXiv:1603.04467, 2016. 5
+
+ground-truth
+
+our prediction
+
+expression=“a bear lying to the right of another bear”
+
+ground-truth
+
+our prediction
+
+expression=“man in sunglasses walking towards two talking men”
+
+ground-truth
+
+our prediction
+
+expression=“a picnic table that has a bottle of water sitting on it”
+
+correct
+expression=“woman in a cream colored wedding dress cutting cake”
+
+correct
+expression=“a man going before a lady carrying a cellphone”
+
+correct expression=“pizza slice not eaten”
+
+correct
+expression=“a full grown brown bear near a young bear”
+
+correct
+expression=“black dog standing on all four legs”
+
+incorrect expression=“chair being sat in by a man”
+
+correct
+
+incorrect
+
+correct
+
+Figure 5. Examples of referential expressions in the Google-Ref dataset. The left column shows the ground-truth region and the right
+
+column shows the grounded subject region (our prediction) in solid box and the grounded object region in dashed box. A prediction is
+
+labeled as correct if the predicted subject region matches the ground-truth region.
+
+ground-truth
+
+our prediction
+
+ground-truth
+
+our prediction
+
+ground-truth
+
+our prediction
+
+question=“Which wine glass is in the man’s hand?”
+
+question=“Which person is wearing a helmet?”
+
+question=“Which mouse is on a pad by computer?”
+
+correct
+question=“Which head is that of an adult giraffe?”
+
+correct
+question=“Which pants belong to the man closest to the train?”
+
+correct
+question=“Which white pillow is leftmost on the bed?”
+
+correct
+question=“Which red shape is on a large white sign?”
+
+correct
+question=“Which is not a pair of a living canine?”
+
+correct
+question=“Which hand can be seen from under the umbrella?”
+
+correct
+
+incorrect
+
+correct
+
+Figure 6. Example pointing questions in the Visual-7W dataset. The left column shows the 4 multiple choices (ground-truth answer in
+
+yellow) and the right column shows the grounded subject region (predicted answer) in solid box and the grounded object region in dashed
+
+box. A prediction is labeled as correct if the predicted subject region matches the ground-truth region.
+
+[2] J. Andreas, M. Rohrbach, T. Darrell, and D. Klein. Learning to compose neural networks for question answering. In Proceedings of the Conference of the North American Chapter of the Association for Computational Linguistics (NAACL), 2016. 2
+[3] J. Andreas, M. Rohrbach, T. Darrell, and D. Klein. Neural module networks. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2016. 2, 5
+[4] P. Arbela´ez, J. Pont-Tuset, J. Barron, F. Marques, and J. Malik. Multiscale combinatorial grouping. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2014. 2
+[5] J. Ba, V. Mnih, and K. Kavukcuoglu. Multiple object recognition with visual attention. In Proceedings of the International Conference on Learning Representations (ICLR), 2015. 4
+[6] J. Dai, Y. Li, K. He, and J. Sun. R-fcn: Object detection via region-based fully convolutional networks. In Advances in Neural Information Processing Systems (NIPS), 2016. 1
+[7] A. Fukui, D. H. Park, D. Yang, A. Rohrbach, T. Darrell, and M. Rohrbach. Multimodal compact bilinear pooling for visual question answering and visual grounding. In Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP), 2016. 2
+[8] R. Girshick, J. Donahue, T. Darrell, and J. Malik. Rich feature hierarchies for accurate object detection and semantic segmentation. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2014. 1, 2
+[9] X. Glorot and Y. Bengio. Understanding the difﬁculty of training deep feedforward neural networks. In Aistats, volume 9, pages 249–256, 2010. 5
+[10] R. Hu, M. Rohrbach, and T. Darrell. Segmentation from natural language expressions. In Proceedings of the European Conference on Computer Vision (ECCV), 2016. 6
+[11] R. Hu, H. Xu, M. Rohrbach, J. Feng, K. Saenko, and T. Darrell. Natural language object retrieval. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2016. 1, 2
+[12] J. Johnson, A. Karpathy, and L. Fei-Fei. Densecap: Fully convolutional localization networks for dense captioning. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2016. 6
+[13] P. Kra¨henbu¨hl and V. Koltun. Geodesic object proposals. In Proceedings of the European Conference on Computer Vision (ECCV), 2014. 2
+[14] R. Krishna, Y. Zhu, O. Groth, J. Johnson, K. Hata, J. Kravitz, S. Chen, Y. Kalantidis, L.-J. Li, D. A. Shamma, et al. Visual genome: Connecting language and vision using crowdsourced dense image annotations. arXiv preprint arXiv:1602.07332, 2016. 5, 6
+[15] J. Krishnamurthy and T. Kollar. Jointly learning to parse and perceive: Connecting natural language to the physical world. Transactions of the Association for Computational Linguistics, 1:193–206, 2013. 2
+
+[16] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Dolla´r, and C. L. Zitnick. Microsoft coco: Common objects in context. In Proceedings of the European Conference on Computer Vision (ECCV), 2014. 6
+[17] W. Liu, D. Anguelov, D. Erhan, C. Szegedy, and S. Reed. Ssd: Single shot multibox detector. In Proceedings of the European Conference on Computer Vision (ECCV), 2016. 1
+[18] C. Lu, R. Krishna, M. Bernstein, and L. Fei-Fei. Visual relationship detection with language priors. In Proceedings of the European Conference on Computer Vision (ECCV), 2016. 2
+[19] C. D. Manning, M. Surdeanu, J. Bauer, J. Finkel, S. J. Bethard, and D. McClosky. The Stanford CoreNLP natural language processing toolkit. In Association for Computational Linguistics (ACL) System Demonstrations, pages 55– 60, 2014. 8
+[20] J. Mao, J. Huang, A. Toshev, O. Camburu, A. Yuille, and K. Murphy. Generation and comprehension of unambiguous object descriptions. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2016. 1, 2, 4, 5, 7, 8
+[21] V. K. Nagaraja, V. I. Morariu, and L. S. Davis. Modeling context between objects for referring expression understanding. In Proceedings of the European Conference on Computer Vision (ECCV), 2016. 2, 5, 7
+[22] J. Pennington, R. Socher, and C. D. Manning. Glove: Global vectors for word representation. In Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP), 2014. 4
+[23] J. Redmon, S. Divvala, R. Girshick, and A. Farhadi. You only look once: Uniﬁed, real-time object detection. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2015. 1
+[24] S. Ren, K. He, R. Girshick, and J. Sun. Faster r-cnn: Towards real-time object detection with region proposal networks. In Advances in Neural Information Processing Systems (NIPS), 2015. 1, 6, 8
+[25] A. Rohrbach, M. Rohrbach, R. Hu, T. Darrell, and B. Schiele. Grounding of textual phrases in images by reconstruction. In Proceedings of the European Conference on Computer Vision (ECCV), 2016. 1, 2, 6, 7, 8
+[26] M. Schuster and K. K. Paliwal. Bidirectional recurrent neural networks. IEEE Transactions on Signal Processing, 45(11):2673–2681, 1997. 4
+[27] K. Simonyan and A. Zisserman. Very deep convolutional networks for large-scale image recognition. In Proceedings of the International Conference on Learning Representations (ICLR), 2015. 4, 6
+[28] J. R. Uijlings, K. E. van de Sande, T. Gevers, and A. W. Smeulders. Selective search for object recognition. International journal of computer vision, 104(2):154–171, 2013. 2
+[29] M. Werning, W. Hinzen, and E. Machery. The Oxford handbook of compositionality. Oxford University Press, 2012. 2
+[30] L. Yu, P. Poirson, S. Yang, A. C. Berg, and T. L. Berg. Modeling context in referring expressions. In Proceedings of the European Conference on Computer Vision (ECCV), 2016. 2, 7
+
+[31] M. Zhu, Y. Zhang, W. Chen, M. Zhang, and J. Zhu. Fast and accurate shift-reduce constituent parsing. In ACL (1), pages 434–443, 2013. 4, 8
+[32] Y. Zhu, O. Groth, M. Bernstein, and L. Fei-Fei. Visual7w: Grounded question answering in images. arXiv preprint arXiv:1511.03416, 2015. 5, 8
+[33] C. L. Zitnick and P. Dolla´r. Edge boxes: Locating object proposals from edges. In Proceedings of the European Conference on Computer Vision (ECCV), 2014. 2
+

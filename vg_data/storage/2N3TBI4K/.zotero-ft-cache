@@ -1,0 +1,364 @@
+Skip to search form Skip to main content Skip to account menu
+Semantic Scholar Semantic Scholar's Logo
+Search
+Andy
+
+    DOI: 10.48550/arXiv.2210.09263
+    Corpus ID: 252918286
+
+Vision-Language Pre-training: Basics, Recent Advances, and Future Trends
+
+ @article{Gan2022VisionLanguagePB,
+  title={Vision-Language Pre-training: Basics, Recent Advances, and Future Trends},
+  author={Zhe Gan and Linjie Li and Chunyuan Li and Lijuan Wang and Zicheng Liu and Jianfeng Gao},
+  journal={ArXiv},
+  year={2022},
+  volume={abs/2210.09263},
+  url={https://api.semanticscholar.org/CorpusID:252918286}
+}
+
+    Zhe Gan , Linjie Li , +3 authors Jianfeng Gao
+    Published in Foundations and Trends in… 17 October 2022
+    Computer Science, Linguistics
+
+TLDR
+This paper surveys vision-language pre-training (VLP) methods for multimodal intelligence that have been developed in the last few years, and presents a comprehensive review of state-of-the-art methods. Expand
+View PDF on arXiv
+Save to Library Save
+Create Alert Alert
+Cite
+easyScholar文献管理
+Share
+76 Citations
+Highly Influential Citations
+2
+Background Citations
+41
+Methods Citations
+11
+View All
+
+    Figures and Tables
+    76 Citations
+    Related Papers 
+
+Figures and Tables from this paper
+
+    figure 1.1
+    figure 1.1
+    figure 1.2
+    figure 1.2
+    figure 1.3
+    figure 1.3
+    figure 2.1
+    figure 2.1
+    figure 2.2
+    figure 2.2
+    figure 2.3
+    figure 2.3
+    figure 2.4
+    figure 2.4
+    figure 2.5
+    figure 2.5
+    figure 2.6
+    figure 2.6
+    figure 2.7
+    figure 2.7
+    table 3.1
+    table 3.1
+    figure 3.1
+    figure 3.1
+    figure 3.10
+    figure 3.10
+    figure 3.11
+    figure 3.11
+    figure 3.12
+    figure 3.12
+    figure 3.2
+    figure 3.2
+    figure 3.3
+    figure 3.3
+    table 3.3
+    table 3.3
+    figure 3.4
+    figure 3.4
+    figure 3.5
+    figure 3.5
+    figure 3.6
+    figure 3.6
+    figure 3.7
+    figure 3.7
+    figure 3.8
+    figure 3.8
+    figure 3.9
+    figure 3.9
+    table 4.1
+    table 4.1
+    figure 4.2
+    figure 4.2
+    figure 4.3
+    figure 4.3
+    figure 4.4
+    figure 4.4
+    figure 4.5
+    figure 4.5
+    figure 4.6
+    figure 4.6
+    figure 4.7
+    figure 4.7
+    figure 4.8
+    figure 4.8
+    figure 4.9
+    figure 4.9
+    figure 5.1
+    figure 5.1
+    table 5.1
+    table 5.1
+    figure 5.2
+    figure 5.2
+    figure 5.3
+    figure 5.3
+    figure 5.4
+    figure 5.4
+    figure 5.5
+    figure 5.5
+    figure 5.6
+    figure 5.6
+    figure 5.7
+    figure 5.7
+    figure 6.1
+    figure 6.1
+    figure 6.2
+    figure 6.2
+    figure 6.3
+    figure 6.3
+    figure 6.4
+    figure 6.4
+
+View All 45 Figures & Tables
+76 Citations
+Date Range
+Citation Type
+Has PDF
+Author
+More Filters
+Bootstrapping Vision-Language Learning with Decoupled Language Pre-training
+
+    Yiren Jian Chongyang Gao Soroush Vosoughi
+    Computer Science, Linguistics
+    arXiv.org
+    2023 
+
+TLDR
+The Prompt-Transformer (P-Former) is introduced, a model that predicts these ideal prompts to align with visual features, which is trained exclusively on linguistic data, bypassing the need for image-text pairings. Expand
+
+    1
+    [PDF] 
+
+    2 Excerpts 
+
+Save
+From Image to Language: A Critical Analysis of Visual Question Answering (VQA) Approaches, Challenges, and Opportunities
+
+    Md Farhan Ishmam Md Sakib Hossain Shovon M. F. Mridha Nilanjan Dey
+    Computer Science, Linguistics
+    arXiv.org
+    2023 
+
+TLDR
+This work presents a survey in the domain of VQA that delves into the intricacies of V QA datasets and methods over the field's history, introduces a detailed taxonomy to categorize the facets of VZA, and highlights the recent trends, challenges, and scopes for improvement. Expand
+
+    Highly Influenced
+    [PDF] 
+
+    6 Excerpts 
+
+Save
+LAVENDER: Unifying Video-Language Understanding as Masked Language Modeling
+
+    Linjie Li Zhe Gan +4 authors Lijuan Wang
+    Computer Science
+    Computer Vision and Pattern Recognition
+    2023 
+
+TLDR
+Surprisingly, experimental results show that this unified VidL framework LAVENDER achieves competitive performance on 14 VidL benchmarks, covering video question answering, text-to-video retrieval and video captioning. Expand
+
+    43
+    [PDF] 
+
+Save
+A Review of Deep Learning for Video Captioning
+
+    Moloud Abdar Meenakshi Kollati +8 authors F. Porikli
+    Computer Science, Linguistics
+    arXiv.org
+    2023 
+
+TLDR
+This survey covers deep learning-based VC, including but, not limited to, attention-based architectures, graph networks, reinforcement learning, adversarial networks, dense video captioning (DVC), and more. Expand
+
+    2
+    [PDF] 
+
+Save
+Language Models as Black-Box Optimizers for Vision-Language Models
+
+    Samuel Yu Shihong Liu Zhiqiu Lin Deepak Pathak Deva Ramanan
+    Computer Science
+    arXiv.org
+    2023 
+
+TLDR
+This work proposes employing chat-based LLMs to search for the best text prompt for VLMs and highlights the advantage of conversational feedback that incorporates both positive and negative prompts, suggesting that LLMs can utilize the implicit gradient direction in textual feedback for a more efficient search. Expand
+
+    1
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+Is BERT Blind? Exploring the Effect of Vision-and-Language Pretraining on Visual Language Understanding
+
+    Morris Alper Michael Fiman Hadar Averbuch-Elor
+    Computer Science, Psychology
+    Computer Vision and Pattern Recognition
+    2023 
+
+TLDR
+It is concluded that exposure to images during pretraining affords inherent visual reasoning knowledge that is reflected in language-only tasks that require implicit visual reasoning, providing principled guidelines for the choice of text encoders used in such contexts. Expand
+
+    2
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+Rephrase, Augment, Reason: Visual Grounding of Questions for Vision-Language Models
+
+    Archiki Prasad Elias Stengel-Eskin Mohit Bansal
+    Computer Science
+    arXiv.org
+    2023 
+
+TLDR
+Rephrase, Augment and Reason (RepARe), a gradient-free framework that extracts salient details about the image using the underlying LVLM as a captioner and reasoner, in order to propose modifications to the original question, is presented. Expand
+
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+On the Hidden Mystery of OCR in Large Multimodal Models
+
+    Yuliang Liu Zhang Li +8 authors Xiang Bai
+    Computer Science
+    arXiv.org
+    2023 
+
+TLDR
+This study conducted a comprehensive study of existing publicly available multimodal models, evaluating their performance in text recognition, text-based visual question answering, key information extraction, and handwritten mathematical expression recognition. Expand
+
+    30
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+Visual Instruction Tuning
+
+    Haotian Liu Chunyuan Li Qingyang Wu Yong Jae Lee
+    Computer Science
+    arXiv.org
+    2023 
+
+TLDR
+This paper presents LLaVA: Large Language and Vision Assistant, an end-to-end trained large multimodal model that connects a vision encoder and LLM for general-purpose visual and language understanding and introduces GPT-4 generated visual instruction tuning data, the model and code base publicly available. Expand
+
+    547
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+Vision-Text Cross-Modal Fusion for Accurate Video Captioning
+
+    Kaouther Ouenniche Ruxandra Tapu T. Zaharia
+    Computer Science
+    IEEE Access
+    2023 
+
+TLDR
+This paper introduces a novel end-to-end multimodal video captioning framework based on cross-modal fusion of visual and textual data that captures the visual-textual inter-model relationships using cross-correlation and encodes the interdependencies between text and video information using attention mechanisms. Expand
+
+    PDF
+
+    3 Excerpts 
+
+Save
+...
+1
+2
+3
+4
+5
+...
+Related Papers
+
+Showing 1 through 3 of 0 Related Papers
+
+Stay Connected With Semantic Scholar
+Sign Up
+What Is Semantic Scholar?
+
+Semantic Scholar is a free, AI-powered research tool for scientific literature, based at the Allen Institute for AI.
+Learn More
+About
+About Us Meet the Team Publishers Blog (opens in a new tab) AI2 Careers (opens in a new tab)
+Product
+Product Overview Semantic Reader Scholar's Hub Beta Program Release Notes
+API
+API Overview API Tutorials API Documentation (opens in a new tab) API Gallery
+Research
+Publications Researchers Research Careers Prototypes Resources
+Help
+FAQ Librarians Tutorials Contact
+Proudly built by AI2 (opens in a new tab)
+Collaborators & Attributions • Terms of Service (opens in a new tab) • Privacy Policy (opens in a new tab) • API License Agreement
+The Allen Institute for AI (opens in a new tab)
+.backdrop{height:78px;width:148px}.backdrop__papers{fill:#D9DADB;opacity:0.5}.jewel__backdrop{fill:#1857B6}.jewel__icon{fill:#fff}
+What is the goal of this paper?
+What are the key results of this paper?
+What methods are used?
+Submit
+Unknown Error
+An unexpected error occurred. Please try again.
+Ask Another Question
+No Answer Found
+Ask another question that can be answered by this paper or rephrase your question.
+Ask Another Question
+We are still processing this paper
+Please try again later.
+Question Answering Unavailable
+Please try again later.
+No Response
+The server took too long to answer your question. You can either rephrase your question or wait until it is less busy.
+Ask Another Question
+Ask Another Question
+AI-Generated
+Why did you choose this rating?
+Optional
+Submit
+Thank you for your feedback!
+We're sorry, something went wrong while submitting this feedback.
+Why did you choose this rating?
+Optional
+Unsafe/Offensive
+Not factually correct
+Other
+Submit
+Thank you for your feedback!
+We're sorry, something went wrong while submitting this feedback.
+Supporting Statements
+Next Statement
+View in PDF
