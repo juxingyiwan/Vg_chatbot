@@ -1,0 +1,1149 @@
+Real-Time Referring Expression Comprehension by Single-Stage Grounding Network
+
+Xinpeng Chen1∗ Lin Ma1† Jingyuan Chen2∗ Zequn Jie1 Wei Liu1 Jiebo Luo3 1Tencent AI Lab 2National University of Singapore 3University of Rochester
+
+{jschenxinpeng, forest.linma, jingyuanchen91, zequn.nus}@gmail.com
+
+wl2223@columbia.edu
+
+jluo@cs.rochester.edu
+
+arXiv:1812.03426v1 [cs.CV] 9 Dec 2018
+
+Abstract
+In this paper, we propose a novel end-to-end model, namely Single-Stage Grounding network (SSG), to localize the referent given a referring expression within an image. Different from previous multi-stage models which rely on object proposals or detected regions, our proposed model aims to comprehend a referring expression through one single stage without resorting to region proposals as well as the subsequent region-wise feature extraction. Speciﬁcally, a multimodal interactor is proposed to summarize the local region features regarding the referring expression attentively. Subsequently, a grounder is proposed to localize the referring expression within the given image directly. For further improving the localization accuracy, a guided attention mechanism is proposed to enforce the grounder to focus on the central region of the referent. Moreover, by exploiting and predicting visual attribute information, the grounder can further distinguish the referent objects within an image and thereby improve the model performance. Experiments on RefCOCO, RefCOCO+, and RefCOCOg datasets demonstrate that our proposed SSG without relying on any region proposals can achieve comparable performance with other advanced models. Furthermore, our SSG outperforms the previous models and achieves the state-of-art performance on the ReferItGame dataset. More importantly, our SSG is time efﬁcient and can ground a referring expression in a 416 × 416 image from the RefCOCO dataset in 25ms (40 referents per second) on average with a Nvidia Tesla P40, accomplishing more than 9× speedups over the existing multi-stage models.
+1. Introduction
+The referring expression comprehension [32, 33, 34, 35], also known as referring expression grounding, is a fun-
+∗Work done while Xinpeng Chen and Jingyuan Chen were Research Interns with Tencent AI Lab.
+†Corresponding author.
+
+(a). A Tranditional Method
+
+Referring Expression left guy in blue
+
+Region Proposals
+
+Proposals Methods
+
+LSTM
+
+Textual Feature
+
+CNN
+…
+
+Input Image
+
+Region Proposals Generation
+
+Multimodal Feature Extraction
+
+Feature Matching
+
+Region Scores
+
+(b). Our SSG Model
+
+Referring Expression left guy in blue
+Input Image
+
+LSTM CNN
+
+Local Regions Features
+
+Multimodal Encoder
+
+Textual Feature Visual Feature
++
+
+Guided Attention Loss Attribute Prediction Loss Confidence Score Loss
+Bounding Box Loss
+
+Joint Feature
+
+Multimodal Interactor
+
+Referring Expression Grounder
+
+Figure 1. A comparison between our SSG model and a traditional multi-stage method. By completely discarding the region proposal generation stage and directly predicting the bounding box for the referring expression, our SSG model runs faster by design.
+
+damental research problem which has received increasing attention from both computer vision and natural language processing research communities. Given an image as well as a referring expression, which describes a speciﬁc referent within the image, the referring expression comprehension aims to localize the referent corresponding to the semantic meaning of the referring expression. This is a generalpurpose yet challenging vision plus language task, since it requires not only localization of the referent, but also highlevel semantic comprehension of the referring and relationships (e.g. “left” in Fig. 1) that help distinguish the correct referent from the other unrelated ones in the same image.
+Previous referring expression comprehension models can be regarded as multi-stage methods which comprise three stages [7, 14, 16, 24, 32, 33, 34, 35], as illustrated in Fig. 1 (a). First, the conventional object proposal generation methods, such as EdgeBox [36], Selective Search [28], or off-the-shelf object detectors such as Faster R-CNN [23], SSD [12], and mask R-CNN [4], are utilized to extract a set of regions as the candidates for
+
+1
+
+matching the referring expression. Second, convolutional neural networks (CNNs) [26, 27] and recurrent neural networks (RNNs) [2, 5] are used to encode the image regions and the referring expression, respectively. Finally, a ranking model is designed to select the region with the highest matching score as the referent. These multi-stage models have achieved remarkable performance over related datasets on the referring expression comprehension task [32, 34, 35].
+However, these multi-stage models are very computationally expensive, with high time cost taken in each stage, especially region proposal generation and region-wise feature extraction, as illustrated in Table 3. As such, these models are not applicable to the practical scenarios with real-time requirements. Therefore, this new challenge motivates and inspires us to design a grounding model which can localize the referent within an image both effectively and efﬁciently. To this end, in this paper, we propose a Single-Stage Grounding network (SSG) to achieve the realtime grounding results as well as the favorable performance without resorting to region proposals. More speciﬁcally, as shown in Fig. 1 (b), our SSG model consists of three components, namely multimodal encoder, multimodal interactor, and referring expression grounder. The multimodal encoder (Sec. 3.1) is leveraged to encode the given image and the referring expression, respectively. The multimodal interactor (Sec. 3.2) aims to attentively summarize the image local representations conditioned on the textual representation. Finally, based on the joint representation, the referring expression grounder (Sec. 3.3) is responsible for directly predicting the coordinates of the bounding box corresponding to the referring expression. In addition to the bounding box regression loss, additional three auxiliary losses are introduced to further improve the performance of SSG. They are the conﬁdence score loss (Sec. 3.3.1) reﬂecting how accurate the bounding box is, the attention weight loss (Sec. 3.3.2) enforcing the grounder to focus on the useful region by using the central point of the ground-truth bounding box as the target, and the attribute prediction loss (Sec. 3.3.3) beneﬁting to distinguish the referring objects in the same image. As such, our [proposed SSG performs in one single stage for tackling the referring expression comprehension task, thus leading to the comparable model performance as well as more than 9× speedups over the existing multi-stage models.
+In summary, the main contributions of our work are as follows:
+• We propose a novel end-to-end model, namely SingleStage Grounding network (SSG) for addressing the referring expression comprehension task, which directly predicts the coordinates of the bounding box within the given image corresponding to the referring expression without relying on any region proposals.
+
+• We propose a guided attention mechanism with the object center-bias to encourage our SSG to focus on the central region of a referent. Moreover, our proposed SSG can further distinguish referent objects, by exploiting and predicting the visual attribute information.
+• Our SSG can carry out the referring expression comprehension task both effectively and efﬁciently. Speciﬁcally, our SSG achieves comparable results with the state-of-the-art models, while taking more than 9× faster under the same hardware environment.
+2. Related Work
+2.1. Referring Expression Comprehension
+The referring expression comprehension task is to localize a referent within the given image, which semantically corresponds to the given referring expression. This task involves comprehending and modeling the different spatial contexts, such as spatial conﬁgurations [14, 33], attributes [11, 32], and the relationships between regions [16, 33]. In previous work, this task is generally formulated as a ranking problem over a set of region proposals from the given image. The region proposals are extracted from the proposal generation methods such as EdgeBoxes [36], or advanced object detection methods such as SSD [12], Faster RCNN [23], and Mask R-CNN [4]. Earlier models [14, 33] scored region proposals according to visual and spatial feature representations. However, these methods fail to incorporate the interactions between objects because the scoring process of each region is isolated. Nagaraja et al. [16] improved the performance with the help of modeling the relationships between region proposals. Yu et al. [34] proposed a joint framework that integrates referring expression comprehension and generation tasks together. The visual features from the region proposals and the semantic information from the referring expressions are embedded into a common space. Zhang et al. [35] developed a variational Bayesian framework to exploit the reciprocity between the referent and context. In spite of these models and their variants have achieved remarkable performance improvements on the referring comprehension task [32], these multi-stage methods could be computationally expensive for practical applications.
+2.2. Object Detection
+Our proposed SSG also beneﬁts from the state-of-art object detectors, especially YOLO [20], YOLO-v2 [21], and YOLO-v3 [22]. YOLO [20] divides an input image into 7 × 7 grid cells and directly predicts both the conﬁdence values for multiple categories and coordinates of the bounding boxes. Similar to YOLO, YOLO-v2 [21] also divides an input image into a set of grid cells. However, it places 5 anchor boxes at each grid cell and predicts corrections of the
+
+2
+
+anchor boxes. Furthermore, YOLO-v3 takes a deeper network with 53 convolutional layers as the backbone which is more powerful. In order to localize small objects, YOLOv3 [22] also introduces the additional pass-through layer to obtain more ﬁne-grained features.
+3. Architecture
+Given an image I and a referring expression E = {et}Tt=1, where et is the t-th word and T denotes the total number of words, the goal of referring expression comprehension is to localize one sub-region Ib within the image I, which corresponds to the semantic meaning of the referring expression E.
+We propose a novel model free of region proposals, namely SSG, to tackle the referring expression comprehension task. As illustrated in Fig. 2, our proposed SSG is a single-stage model and consists of three components. More speciﬁcally, the multimodal encoders generate the visual and textual representations for the image and referring expression, respectively. Afterward, the multimodal interactor performs a visual attention mechanism which aims to generate an aggregated visual vector by focusing on the useful region of the input image. Finally, the referring expression grounder performs the localization to predict the bounding box corresponding to the referring expression.
+3.1. Multimodal Encoder
+The multimodal encoder in our SSG is used to generate the semantic representation of the input data, i.e., both image and text, as shown in Fig. 2.
+3.1.1 Image Encoder
+We take an advanced CNN architecture — YOLO-v31 [22] — pretrained on the MSCOCO-LOC dataset [10] as the image encoder. Speciﬁcally, we ﬁrst resize the given image I to the size as 3×416×416, and then feed it into the encoder network. The output vectors s = {sn}Nn=1, sn ∈ RDI , from the 58-th convolutional layer are used as the feature representations which denote different local regions for the image. According to the network structure of YOLO-v3, sn is a vector with dimension size DI = 1024, and the total number of local regions N = 169.
+3.1.2 Text Encoder
+Given a referring expression E = {et}Tt=1, where et denotes the t-th word. First, each word in the referring expression needs to be initialized by the recent advanced word embedding models, such as Word2Vec [15], GloVe [18], and ELMo [19]. In this paper, we take the EMLo model
+1https://pjreddie.com/media/ﬁles/yolov3.weights
+
+pre-trained on a dataset of 5.5B tokens to generate the corresponding word embedding vectors w = {wt}Tt=1, wt ∈ RDw , where the dimension size is Dw = 3072. Afterwards, each word embedding vector wt of the referring expression is fed into an RNN encoder sequentially to generate a ﬁxedlength semantic vector as its textual feature.
+In order to adequately capture long-term dependencies between words, Long Short-Term Memory (LSTM) [5] with speciﬁcally designed gating mechanisms is employed as the RNN unit to encode the referring expression. Moreover, the bidirectional LSTM (Bi-LSTM) [25, 32] can capture the past and future context information for the referring expression, which thereby outperforms both traditional LSTMs and RNNs. In this paper, the text encoder is realized by stacking two Bi-LSTM layers together, with hidden size being H = 512 and initial hidden and cell states setting to zeros. The semantic representation of the reference expression is thus obtained by concatenating the forward and backward outputs of the two stacked layers:
+
+vE = [h(T1,f w); h(T1,bw); h(T2,f w); h(T2,bw)],
+
+(1)
+
+where hT(1,fw) and hT(2,fw) indicate the forward outputs of the ﬁrst and second layers of Bi-LSTM, respectively. And h(T1,bw) and h(T2,bw) indicate the corresponding backward outputs of the ﬁrst and second layers of Bi-LSTM. vE ∈ RDE , with the dimension size being DE = 2048,
+denotes the ﬁnally obtained textual feature.
+
+3.2. Multimodal Interactor
+
+Based on the local visual features s and textual feature
+vE, a multimodal teractor is proposed to attentively exploit and summarize their complicated relationships. Speciﬁ-
+cally, we take the attention mechanism [29] to aggregate the visual local features s = {sn}Nn=1, sn ∈ RDI and generate the aggreagted visual feature vI ∈ RDI conditioned on the textual feature vE ∈ RDE of the referring expression:
+
+|s|
+
+vI = fatt(s, vE ) =
+i=1
+
+exp (α(si, vE
+
+|s| j=1
+
+exp
+
+(α(sj
+
+,
+
+)) vE
+
+))
+
+si
+
+,
+
+(2)
+
+where fatt denotes the attention mechanism. α(si, hT ) determines the attentive weight for the i-th visual local feature si with regard to the expression representation vE, which is realized by a Multi-Layer Perceptron (MLP):
+
+α(si, vE ) = Wsi,vE tanh(Wsi si + WvE vE ),
+
+(3)
+
+where Wsi,vE ∈ RH×N , Wsi ∈ RDI ×H , and WvE ∈ RDE×H are the trainable parameters of the MLP.
+Such an attention mechanism enables each local visual feature to meet and interact with the referring expression representation, therefore attentively summarizing the visual local features together and yielding the aggregated visual context feature. Finally, by concatenating the aggregated
+
+3
+
+Input Image 416 x 416
+CNN
+
+Bi-LSTM
+
+Bi-LSTM
+
+Bi-LSTM
+
+Bi-LSTM
+
+Bi-LSTM
+
+Bi-LSTM
+
+Bi-LSTM
+
+Bi-LSTM
+
+Conv-58 Outputs 13 x 13 x 1024
+…
+…
+
+Attention Weights 13 x 13
+
+…
+
+…
+
+Guided Attention
+
+……
+
+…
+
+… 1 x 1 x 1024 1024 x 50
+
+Attribute Prediction
+
+Conv
+
+FC
+
+1 x 1 x 3072 1 x 1 x 5
+
+Central Point
+blue girl red guy …
+
++
+
+Conv
+
+Conv
+
+concatenation
+
+left
+
+guy
+
+in
+
+blue
+
+concatenation
+
+Localization
+
+Multimodal Encoder
+
+Multimodal Interactor
+
+Referring Expression Grounder
+
+Figure 2. An overview of our proposed SSG model. The input image is encoded by a CNN to generate the local visual features representing different regions. An RNN encoder realized by a two-layer bidirectional LSTM (Bi-LSTM) is employed to process the referring expression sequentially and yield the textual feature. The multimodal interactor attentively exploits and summarizes the complicated relationships between the visual and textual features. In the referring expression grounder, the localization module relies on the joint context representations to yield the coordinates and the conﬁdence score of the bounding box. Moreover, a novel guided attention mechanism by relating the attention weights to the referring region, enforces the visual attention to focus on the central region of the referent. Furthermore, the attribute prediction module is introduced to reproduce the attribute information contained in the referring expression. Please note that we only use the localization module to generate the bounding box for the referring expression during the inference stage.
+
+visual context feature and the textual feature together, we can obtain the joint representation vI,E ∈ RDI,E for the
+image and referring expression:
+
+vI,E = [vI ; vE ],
+
+(4)
+
+where the dimension size is DI,E = 3072. Based on vI,E, our proposed referring expression grounder is proposed to localize the image region for the referring expression.
+Discussion. Note that our multimodal interactor is different from the maximum attention module proposed in GroundR [24]. The local regions for attention in GroundR are ﬁrst extracted by Selective Search [28] or EdgeBoxes [36], and then encoded by the VGG [26] model. Moreover, the “in-box” attention module proposed in [32] is used to localize the relevant region within a region proposal without any auxiliary guided attention loss (Sec. 3.3.2).
+
+3.3. Referring Expression Grounder
+
+As illustrated in Fig. 2, the referring expression grounder consists of three modules, namely localization, guided attention, and attribute prediction. We ﬁrst introduce the localization module for predicting the bounding box as well as the conﬁdence score, which relies on the coordinate information of the ground-truth referents for training. Subsequently, we introduce the guided attention mechanism and
+
+the attribute prediction modules to further improve the localization accuracy by exploiting the hidden information contained in the image as well as the referring expression.
+3.3.1 Localization
+We rely on the joint representation vI,E to predict the referring region within the image I, indicated by a bounding box bpred, which semantically corresponds to the referring expression E. As illustrated in Fig. 2, the joint representation vI,E undergoes one convolutional layer with 3072 ﬁlters and stride 1 × 1. Afterwards, another convolutional layer with 5 ﬁlters and stride 1×1 followed by a sigmoid function is stacked to predict the coordinate information, which consists of 4 values {tx, ty, tw, th} and the conﬁdence score tc for the predicted bounding box bpred. Here, a convolutional layer consists of a convolution operation and an activation process, speciﬁcally the Leaky ReLU [13].
+Coordinates. The four coordinates are real values between 0 and 1 relative to the width and height of the image. More speciﬁcally, tx and ty denote the top-left coordinates, while tw and th indicate the width and height of the bounding box. In order to reﬂect that small deviations in large bounding boxes matter less than those in small boxes, similar to [20], we predict the square root of the bounding
+
+4
+
+box width and height instead of the actual width and height. As such, the coordinates of the predicted bounding box are computed:
+
+bx = tx ∗ pw, by = ty ∗ ph,
+
+bw = t2w ∗ pw,
+
+bh = t2h ∗ ph,
+
+(5)
+
+where pw and ph represent the width and the height of the input image, respectively. {bx, by}, bw, and bh denote the top-left coordinates, width, and height of the predicted bounding box bpred, respectively. During the training, the mean squared error (MSE) is used as the objective function:
+
+Lloc =
+
+tx
+
+−
+
+ˆbx pw
+
+2
++
+
+ty
+
+−
+
+ˆby ph
+
+2
+
+
+
+2 
+
+2 (6)
+
++ tw −
+
+ˆbw 
+pw
+
++ th −
+
+ˆbh 
+
+,
+
+ph
+
+where ˆbx, ˆby, ˆbw, ˆbh are the coordinate information of the ground-truth bounding box bgt.
+Conﬁdence Score. As aforementioned, besides the coordinate information, the localization module will also generate a conﬁdence score tc, reﬂecting the accuracy of the predicted box. During the evaluation, a predicted bounding box is regarded as a correct comprehension result if the intersection-over-union (IoU) of the box with the groundtruth bounding box is larger than a threshold η. Usually, the threshold is set to η = 0.5. Therefore, we naturally realize the conﬁdence score prediction as a binary classiﬁcation problem rather than a regression problem as YOLO [20]. Hence the target conﬁdence score ˆbc is deﬁned as:
+
+ˆbc = 1, if IoU (bpred, bgt) ≥ η
+
+(7)
+
+0, otherwise
+
+The objective function regarding the conﬁdence score is deﬁned as a binary cross-entropy:
+
+Lconf = ˆbc ∗ log(tc) + (1 − ˆbc) ∗ log(1 − tc).
+
+(8)
+
+Please note that the objective function regarding conﬁdence score is different from the deﬁnition in [20, 21], which is considered as a regression problem and formulated as P r(bgt)∗IoU (bpred, bgt), where P r(bgt) is equal to 1 when there is an object in the cell, and 0 otherwise.
+
+3.3.2 Guided Attention
+For further boosting the grounding accuracy, we propose a guided attention mechanism to encourage our model to pay more attention to the central region of the correct referent. As introduced in Sec. 3.2, a set of attention weights α = {αn}Nn=1, αn ∈ R are computed conditioned on the textual feature for different visual local features, with each
+
+Attention Weights 13 x 13
+…
+
+…
+
+……
+
+…
+
+…
+
+Labels 13 x 13
+1
+
+Input Image 416 x 416
+Central Point
+
+Figure 3. The illustration of our proposed guided attention loss. We formulate the guided attention process as a classiﬁcation problem with the local region, where the central point falls into being labeled as 1 and the rest labeled as 0.
+representing its relevance to the referring expression. We notice that there exists one piece of hidden information, namely object center bias [1], which we can make full use of. The central region of the ground-truth bounding box should produce the maximum attention weight since the visual feature related to the central region is more important for grounding the referring expression. To this end, as illustrated in Fig. 3, we ﬁrst identify the position of the center point using the ground-truth bounding box, and encode it into a one-hot vector as the label yˆ, which means that only the region cell, where the central point of the referent falls into, is labeled as 1 with all the rest labeled as 0. The coordinates of the central point after rescaling to the size of the attention weight map are given by:
+
+ˆbx + 0.5 × ˆbw , ˆby + 0.5 × ˆbh .
+
+(9)
+
+m
+
+m
+
+As mentioned in Sec. 3.1.1, the sizes of the attention weight map and the input image are 13 × 13 and 416 × 416, respectively. Therefore, the rescaling factor m is set to 416/13 = 32. Finally, we use the cross-entropy loss as the objective function to measure the difference between the visual attention weights and the obtained one-hot label yˆ:
+
+N
+
+Latt = − yˆilogαi,
+
+(10)
+
+i
+
+where yˆi denotes the i-th entry of the label vector yˆ. N denotes the number of attention weights, which is equal to 13 × 13 = 169. Such auxiliary loss can help our model learn to discriminate the target region with the other ones and encourage the attentive visual feature to embed more important information for predicting the bounding box.
+
+3.3.3 Attribute Prediction
+Additionally, visual attributes are usually used to distinguish referent objects of the same category and have shown impressive performance on many multimodal tasks, such as image captioning [8, 30, 31], video captioning [17], and referring expression comprehension [11, 32]. Inspired by the previous work [32], we introduce an attribute prediction module to further boost the performance of our grounder.
+
+5
+
+Table 1. The performance comparisons (Acc%) of different methods on RefCOCO, RefCOCO+, and RefCOCOg datasets. The best results
+
+among all models are marked with boldface.
+
+Line Models
+
+RefCOCO
+
+RefCOCO+
+
+RefCOCOg RefCOCOg
+
+test A test B test A test B val (google) val (umd)
+
+1
+
+MMI [14]
+
+64.90 54.51 54.03 42.81
+
+2
+
+Vis-Diff + MMI [33]
+
+67.64 55.16 55.81 43.43
+
+3
+
+Neg-Bag [16]
+
+58.70 56.40
+
+-
+
+-
+
+4
+
+Attr + MMI + Vis-Diff [11]
+
+72.08 57.29 57.97 46.20
+
+5
+
+CMN [6]
+
+71.03 65.77 54.32 47.76
+
+6
+
+Speaker + Listener + MMI [34]
+
+72.95 62.43 58.58 48.44
+
+7
+
+Speaker + Listener + Reinforcer + MMI [34] 72.94 62.98 58.68 47.68
+
+8
+
+Variational Context [35]
+
+73.33 67.44 58.40 53.18
+
+9
+
+MAttNet [32]
+
+80.43 69.28 70.26 56.00
+
+45.85 46.86
+52.35 57.47 57.34 57.72 62.30
+-
+
+49.50 66.67
+
+10
+
+SSG (λloc)
+
+11
+
+SSG (λloc+conf)
+
+12
+
+SSG (λloc+conf+att)
+
+13
+
+SSG (λloc+conf+att+attr)
+
+72.90 73.44 75.20 76.51
+
+63.97 64.39 65.77 67.50
+
+23.00 58.16 61.39 62.14
+
+16.51 43.55 46.50 49.27
+
+17.64 42.10 43.90 47.78
+
+18.83 51.97 56.63 58.80
+
+As illustrated in Fig. 2, the attentively aggregated visual
+
+feature vI undergoes an additional convolutional layer with
+
+1024 ﬁlters and stride 1 × 1. A fully connected layer is
+
+subsequently
+
+stacked
+
+to
+
+predict
+
+the
+
+probabilities
+
+{pi
+
+}Nattr
+i=1
+
+for all Nattr attributes, where Nattr is the number of the
+
+most frequent attribute words extracted from the training
+
+dataset2. In this paper, we empirically set Nattr = 50
+
+as [33]. As such, the attribute prediction can be formu-
+
+lated as a multi-label classiﬁcation problem, whose objec-
+
+tive function is deﬁned as:
+
+Nattr
+
+Lattr =
+
+wiattr (yˆilog(pi) + (1 − yˆi)log(1 − pi)) , (11)
+
+i=1
+
+where wiattr = 1/ freqattr is used to balance the weights of different attributes. yˆi is set to 1 when the i-th attribute word exists in the referring expression, and 0 otherwise. During training, the loss value of attribute prediction is set to zero if there is no attribute word existing in the referring expression.
+
+3.4. Training Objective
+
+The objective function of our SSG model for a single training sample (image, referring expression, bounding box) is deﬁned as a weighted sum of the aforementioned localization loss, the conﬁdence score loss, the guided attention loss, and the attribute prediction loss:
+
+Lsum = λlocLloc + λconfLconf + λattLatt + λattrLattr, (12)
+
+where λloc, λconf, λatt, and λattr are the weight factors to balance the contributions of different losses for model training.
+
+3.5. Inference
+
+During the inference phase, only the localization module is enabled to predict the bounding box, which corresponds
+
+2https://github.com/lichengunc/refer-parser2
+
+to the referring expression, with the guided attention and attribute prediction modules deactivated. For one given image I and the corresponding referring expression E, these modules, namely the multimodal encoder (including image and text encoders), multimodal interactor, and localization, fully couple with each other and accordingly predict the bounding box bpred in one single stage. As such, our SSG performs more efﬁciently for referring expression comprehension compared with the existing multi-stage models, which will be further demonstrated in Sec. 4.5.
+4. Experiments
+4.1. Datasets
+We evaluate and compare our proposed SSG with existing approaches comprehensively on the four popular datasets, namely RefCOCO [33], RefCOCO+ [33], RefCOCOg [14], and ReferItGame [9].
+RefCOCO, RefCOCO+, and RefCOCOg were all collected from the MSCOCO [10] dataset, but with several differences. (1). The expressions in RefCOCO contain many location words (e.g. “left”, “corner”). While RefCOCO+ was collected to encourage the expressions to focus on the appearance of the referent without using location words. RefCOCOg contains longer referring expressions on average than RefCOCO and RefCOCO+ (8.4 vs. 3.5) and provides more embellished expressions than RefCOCO and RefCOCOg. (2). Both RefCOCO and RefCOCO+ are divided into train, validation, test A containing person referents, and test B containing common object referents. While RefCOCOg has two types of data partitions. The ﬁrst split is denoted as google which was used in [14]. Since the testing set has not been released, recent work [6, 11, 14, 32, 33, 34, 35] reported their results on the validation set. The second split is denoted as umd which was used in [16, 32]. In this paper, we evaluate our model
+
+6
+
+Table 2. The performance comparisons (Acc%) of different meth-
+
+ods on the ReferItGame dataset.
+
+Line Models
+
+Proposal ReferItGame
+
+1 SCRC [7]
+
+2 GroundR [24]
+
+3 4
+
+CMN [6] Variational Context [35]
+
+EdgeBoxes
+
+5 MAttNet
+
+6 Oracle
+
+17.93 26.93 28.33 31.13 29.04 59.45
+
+7 SSG (λloc)
+
+8 SSG (λloc+conf) 9 SSG (λloc+conf+att)
+
+—
+
+10 SSG (λloc+conf+att+attr)
+
+49.68 49.97 54.14 54.24
+
+on both types of data splits for RefCOCOg.
+ReferItGame also named as RefCLEF was collected from the segmented and annotated extension of the ImageCLEF IAPR TC-12 dataset (SAIAPR TC-12) [3]. Note that the annotated expressions provided by this dataset exist some equivocal words and erroneous annotations, such as anywhere and don’t know. In this paper, we use the same data split as [6, 7, 24, 35] for fair comparison.
+4.2. Experiment Settings
+Proprocessing. As aforementioned, we initialize the word embedding layers in our model with EMLo [19], which is a character-based embedding model. Special characters are removed, resulting in a vocabulary size of 10,342, 12,227, 12,679, and 9,024 for RefCOCO, RefCOCO+, RefCOCOg, and ReferItGame, respectively. We truncate all the referring expressions longer than 15 words and use zero padding for the expressions shorter than 15 words.
+Training. To balance the contribution of each loss for optimal model training in Eq. 12, we empirically set λloc, λconf, λatt and λattr to 20.0, 5.0, 1.0, and 5.0, respectively. The SGD optimizer with an initial learning rate of 1 × 10−3 and the momentum setting as 0.9 is employed to train our model. The learning rate is decreased by 0.8 every 5 epochs. All the expressions for the same referent are tied into one single batch samples for training. Early stopping is used to prevent overﬁtting if the performance on the validation set does not improved over the last 10 epochs. Our SSG is implemented with PyTorch and can be trained within 100 hours on a single Tesla P40 and CUDA 9.0 with Intel Xeon E5-2699v4@2.2GHz.
+Evaluation Metric. Same as the previous work [7, 16, 32, 35], we evaluate the performance of our model using the ratio of Intersection over Union (IoU) between the ground truth and the predicted bounding box. If the IoU is larger than 0.5, we treat this predicted bounding box as a true positive. Otherwise it is a false positive. The fraction of the true positive expressions are denoted as the ﬁnal accuracy.
+
+Table 3. The inference time (seconds per referent) comparisons on the RefCOCO dataset between our SSG, SCRC, and MAttNet. Env. means the hardware environment.
+Models Env. Stage I Stage II Stage III Total
+
+SCRC MAttNet SSG
+
+CPU
+
+0.353 14.907
+-
+
+0.511 0.849
+-
+
+10.781 0.157
+-
+
+11.645 15.913 1.373
+
+SCRC MAttNet SSG
+
+GPU
+
+0.353 0.183
+-
+
+0.025 0.043
+-
+
+0.272 0.010
+-
+
+0.650 0.236 0.025
+
+4.3. Performance Comparisons
+We compare our SSG with existing multi-stage methods comprehensively. For the fair comparison, we directly copy the results from their papers.
+The results on RefCOCO, RefCOCO+, and RefCOCOg are shown in Table 1. Although it is more challenge to localize the referent without resorting to region proposals directly, the results of our SSG (Line 13) on the test A and test B split of RefCOCO outperform most of the previous models, except MAttNet [34]. RefCOCO+ is more challenge than RefCOCO since the referring expressions in RefCOCO+ are annotated with appearance words without location information. Nevertheless, our SSG can take the second and third place on the test A and test B split of RefCOCO+, respectively. On the validation set of RefCOCOg split by google, our model achieves favorable results which is better than [14, 33]. Furthermore, although the performance of SSG on the validation set of RefCOCOg split by umd is worse than the best model MAttNet, it still outperforms [16]. One reason may be that the language used in RefCOCOg tend to be more ﬂowery than the expressions in RefCOCO and RefCOCO+ [33].
+The performance comparisons on ReferItGame of different models are shown in Table. 2. The upper-bound result of the region proposals extracted by EdgeBoxes [36] is only 59.45% (Line 6), which is denoted by “Oracle” as in SCRC [7]. We use the released code as well as off-the-shelf proposals provided by the authors3 [32] to evaluate the performance of MAttNet on the ReferItGame dataset (Line 5). It can be observed that our SSG outperforms all the previous models. One reason may be attributed to the lowquality proposals providing for the ReferItGame dataset, which constraint the performance of the previous multistage models. In contrast, the result of MAttNet evaluated by ourselves using the ground-truth bounding boxes of ReferItGame as region proposals is 81.29%. Our model achieves the much better performance than the existing methods since it can be trained and optimized end-to-end without resorting to region proposals.
+Fig. 4 shows some qualitative results of referring expression comprehension using our proposed SSG, as well as the
+
+3https://github.com/lichengunc/MAttNet
+
+7
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+RefCOCO
+
+right guy in blue
+
+half sandwich front right
+
+RefCOCO+
+
+white man
+
+smallest lamb
+
+RefCOCOg
+a green and white small laptop
+
+ReferItGame person on left
+
+1. blue (0.83) 2. guy (0.52) 3. shirt (0.15) 4. black (0.08) 5. purple (0.04)
+
+1. half (0.80) 2. food (0.17) 3. white (0.05) 4. side (0.05) 5. woman (0.03)
+
+1. white (0.99) 2. shirt (0.95) 3. woman (0.01) 4. guy (0.01) 5. player (0.01)
+
+1. white (0.93) 2. boy (0.04) 3. woman (0.03) 4. number (0.03) 5. animal (0.03)
+
+1. green (0.90) 2. white (0.26) 3. table (0.09) 4. black (0.06) 5. computer (0.03)
+
+1. path (0.64) 2. boy (0.64) 3. hand (0.61) 4. van (0.60) 5. wave (0.59)
+
+Figure 4. Qualitative results of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+visualizations of attention weights and top-5 predicted attributes4. First, our SSG can accurately ground the referents in the images. Second, by visualizing the attention weights, we can observe that our guided attention mechanism can enforce the visual attention mechanism to focus on the meaningful region of the image. And the top-5 predicted attribute words can accurately characterize the attribute information of the referents, such as “blue”, “white”, and “food”.
+4.4. Ablation Study
+We perform ablation studies to examine the contribution of each component of SSG. The results are shown in Table 1 (Line 10 - 13) and Table 2 (Line 7 - 10). As a baseline, the performance of SSG (λloc) trained with localization loss only is illustrated in Table 1 and Table 2. By incorporating the conﬁdence score loss, the performance of SSG (λloc + conf) can be improved obviously. The performance of SSG (λloc + conf + att) by adding the guided attention loss can be further improved. By further introducing the attribute prediction loss, the performance of SSG (λloc + conf + att + attr) can be boosted consistently.
+4.5. Efﬁciency
+We measure the speed by calculating the average time per referent (image, referring expression) at inference stage on the RefCOCO dataset running on the GPU-enabled and
+
+CPU-only environments. Table 3 shows the comparisons between SSG, SCRC [7], and MAttNet [32]. Please note that the computation time of EdgeBoxes5 [36], SCRC6 [7], and MAttNet [32] are all obtained by using the authorreleased code under the same hardware environment. We can observe that all the models with GPU-enabled achieve signiﬁcant speedups compared with the CPU implementations. When we activate the GPU for acceleration, SCRC takes the longest time due to the computation time cost by EdgeBoxes at the proposal extraction stage. MAttNet uses Faster R-CNN [23] for proposal extraction and takes shorter computation time at 0.236s. However, our SSG can signiﬁcantly reduce the computation time to 0.025s for a referring expression along with an image, running at 40 referents per second, which is more than 9× faster than MAttNet.
+5. Conclusion
+In this paper, we proposed a novel grounding model, namely Single-Stage Grounding network (SSG), to directly localize the referent within the given image semantically corresponding to a referring expression without resorting to region proposals. To encourage the multimodal interactor to focus on the useful region for grounding, a guided attention loss based on the object center-bias is proposed. Furthermore, by introducing attribute prediction loss, the performance can be improved consistently. Experiments on
+
+4More qualitative results and failure cases of the referring expression comprehension can be found in Appendix.
+
+5https://github.com/pdollar/edges 6https://github.com/ronghanghu/natural-language-object-retrieval
+
+8
+
+four public datasets show that our SSG model can achieve favorable performance, especially achieving the state-of-art performance on the ReferItGame dataset. Most importantly, our model is fast by design and able to run at 40 referents per second averagely on the RefCOCO dataset.
+References
+[1] A. Borji and J. Tanner. Reconciling saliency and object center-bias hypotheses in explaining free-viewing ﬁxations. IEEE Transactions on Neural Networks and Learning Systems, 27(6):1214–1226, June 2016. 5
+[2] K. Cho, B. van Merrienboer, C. Gulcehre, D. Bahdanau, F. Bougares, H. Schwenk, and Y. Bengio. Learning phrase representations using rnn encoder–decoder for statistical machine translation. In EMNLP, 2014. 2
+[3] H. J. Escalante, C. A. Herna´ndez, J. A. Gonzalez, A. Lo´pezLo´pez, M. Montes, E. F. Morales, L. Enrique Sucar, L. Villasen˜or, and M. Grubinger. The segmented and annotated iapr tc-12 benchmark. Comput. Vis. Image Underst., 114(4):419–428, Apr. 2010. 7
+[4] K. He, G. Gkioxari, P. Dolla´r, and R. Girshick. Mask r-cnn. In ICCV, 2017. 1, 2
+[5] S. Hochreiter and Schmidhuber. Long short-term memory. Neural Comput., 9(8):1735–1780, Nov. 1997. 2, 3
+[6] R. Hu, M. Rohrbach, J. Andreas, T. Darrell, and K. Saenko. Modeling relationships in referential expressions with compositional modular networks. In CVPR, 2017. 6, 7, 10
+[7] R. Hu, H. Xu, M. Rohrbach, J. Feng, K. Saenko, and T. Darrell. Natural language object retrieval. In CVPR, 2016. 1, 7, 8, 10
+[8] W. Jiang, L. Ma, X. Chen, H. Zhang, and W. Liu. Learning to guide decoding for image captioning. In AAAI, 2018. 5
+[9] S. Kazemzadeh, V. Ordonez, M. Matten, and T. L. Berg. Referit game: Referring to objects in photographs of natural scenes. In EMNLP, 2014. 6
+[10] T.-Y. Lin, M. Maire, S. Belongie, J. Hays, P. Perona, D. Ramanan, P. Dolla´r, and C. L. Zitnick. Microsoft coco: Common objects in context. In ECCV, 2014. 3, 6
+[11] J. Liu, L. Wang, and M.-H. Yang. Referring expression generation and comprehension via attributes. In ICCV, 2017. 2, 5, 6, 10
+[12] W. Liu, D. Anguelov, D. Erhan, C. Szegedy, S. Reed, C.-Y. Fu, and A. C. Berg. Ssd: Single shot multibox detector. In ECCV, 2016. 1, 2
+[13] A. L. Maas, A. Y. Hannun, and A. Y. Ng. Rectiﬁer nonlinearities improve neural network acoustic models. In ICML, 2013. 4
+[14] J. Mao, J. Huang, A. Toshev, O. Camburu, and K. Murphy. Generation and comprehension of unambiguous object descriptions. In CVPR, 2016. 1, 2, 6, 7, 10
+[15] T. Mikolov, I. Sutskever, K. Chen, G. S. Corrado, and J. Dean. Distributed representations of words and phrases and their compositionality. In NIPS, 2013. 3
+[16] V. K. Nagaraja, V. I. Morariu, and L. S. Davis. Modeling context between objects for referring expression understanding. In ECCV, 2016. 1, 2, 6, 7, 10
+
+[17] Y. Pan, T. Yao, H. Li, and T. Mei. Video captioning with transferred semantic attributes. In CVPR, 2017. 5
+[18] J. Pennington, R. Socher, and C. D. Manning. Glove: Global vectors for word representation. In EMNLP, 2014. 3
+[19] M. E. Peters, M. Neumann, M. Iyyer, M. Gardner, C. Clark, K. Lee, and L. Zettlemoyer. Deep contextualized word representations. In NAACL, 2018. 3, 7
+[20] J. Redmon, S. Divvala, R. Girshick, and A. Farhadi. You only look once: Uniﬁed, real-time object detection. In CVPR, 2016. 2, 5
+[21] J. Redmon and A. Farhadi. Yolo9000: Better, faster, stronger. arXiv preprint arXiv:1612.08242, 2016. 2, 5
+[22] J. Redmon and A. Farhadi. Yolov3: An incremental improvement. arXiv preprint arXiv:1804.02767, 2018. 2, 3
+[23] S. Ren, K. He, R. Girshick, and J. Sun. Faster r-cnn: Towards real-time object detection with region proposal networks. In NIPS, 2015. 1, 2, 8
+[24] A. Rohrbach, M. Rohrbach, R. Hu, T. Darrell, and B. Schiele. Grounding of textual phrases in images by reconstruction. In ECCV, 2016. 1, 4, 7, 10
+[25] M. Schuster and K. K. Paliwal. Bidirectional recurrent neural networks. IEEE Transactions on Signal Processing, 45(11):2673–2681, 1997. 3
+[26] K. Simonyan and A. Zisserman. Very deep convolutional networks for large-scale image recognition. arXiv preprint arXiv:1409.1556, 2014. 2, 4
+[27] C. Szegedy, S. Ioffe, V. Vanhoucke, and A. A. Alemi. Inception-v4, inception-resnet and the impact of residual connections on learning. In ICLR Workshop, 2016. 2
+[28] J. R. Uijlings, K. E. Van De Sande, T. Gevers, and A. W. Smeulders. Selective search for object recognition. International journal of computer vision, 104(2):154–171, 2013. 1, 4
+[29] K. Xu, J. Ba, R. Kiros, K. Cho, A. C. Courville, R. Salakhutdinov, R. S. Zemel, and Y. Bengio. Show, attend and tell: Neural image caption generation with visual attention. In ICML, 2015. 3
+[30] T. Yao, Y. Pan, Y. Li, Z. Qiu, and T. Mei. Boosting image captioning with attributes. In ICCV, 2017. 5
+[31] Q. You, H. Jin, Z. Wang, C. Fang, and J. Luo. Image captioning with semantic attention. In CVPR, 2016. 5
+[32] L. Yu, Z. Lin, X. Shen, J. Yang, X. Lu, M. Bansal, and T. L. Berg. Mattnet: Modular attention network for referring expression comprehension. In CVPR, 2018. 1, 2, 3, 4, 5, 6, 7, 8, 10
+[33] L. Yu, P. Poirson, S. Yang, A. C. Berg, and T. L. Berg. Modeling context in referring expressions. In ECCV, 2016. 1, 2, 6, 7, 10
+[34] L. Yu, H. Tan, M. Bansal, and T. L. Berg. A joint speakerlistener-reinforcer model for referring expressions. In CVPR, 2017. 1, 2, 6, 7, 10
+[35] H. Zhang, Y. Niu, and S.-F. Chang. Grounding referring expressions in images by variational context. In CVPR, 2018. 1, 2, 6, 7, 10
+[36] C. L. Zitnick and P. Dolla´r. Edge boxes: Locating object proposals from edges. In ECCV, 2014. 1, 2, 4, 7, 8
+
+9
+
+A. Appendix
+A.1. Datasets
+For the referring expression comprehension task, a number of datasets have been used in the previous work [14, 7, 33, 24, 16, 11, 6, 34, 35, 32], which are summarized in Table 4. For comparing our SSG with the previous methods comprehensively, we take the four commonly used datasets for our experiments, which are RefCOCO, RefCOCO+, RefCOCOg, and ReferItGame. Please note that the RefCOCOg dataset has two types of data splits.
+
+Table 4. The datasets used for referring expression comprehension.
+
+Models
+MMI [14] SCRC [7] VisDiff + MMI [33] GroundR [24] Neg-Bag [16] Attribute + VisDiff [11] CMN [6] Speaker-Listener-Reinforcer [34] Variational Context [35] MAttNet [32]
+Our SSG
+
+RefCOCO
+
+RefCOCO+
+
+RefCOCOg
+
+ReferItGame
+
+Flickr30K
+
+Visual Genome
+
+Kitchen
+
+A.2. Effect of End-to-end Training
+Our proposed SSG is an end-to-end model. The parameters in all components can be optimized jointly by stochastic gradient descent methods. As illustrated in Table 5, we report the results when freezing the parameters of the image encoder and compare them to the results with the ﬁne-tuning strategy. The performance can be consistently improved by ﬁne-tuning the image encoder, demonstrating the advantage of the end-to-end training strategy.
+
+Table 5. Ablation study of SSG with and without ﬁne-tuning strategy on the four datasets, which are RefCOCO, RefCOCO+, RefCOCOg, and ReferItGame.
+
+Models
+
+Fine-tuning
+
+RefCOCO test A test B
+
+RefCOCO+ test A test B
+
+RefCOCOg val (google)
+
+RefCOCOg val (umd)
+
+ReferItGame test
+
+SSG (λloc+conf+att+attr)
+
+No
+
+52.88 48.26 35.88 30.36
+
+33.25
+
+SSG (λloc+conf+att+attr)
+
+Yes
+
+76.51 67.50 62.14 49.27
+
+47.78
+
+37.00 58.80
+
+40.05 54.24
+
+10
+
+A.3. More Examples We show more qualitative examples of our SSG (λloc+conf+att+attr) in Fig. 5, Fig. 6, Fig. 7, and Fig. 8. As comparison, we
+also show some failure cases in Fig. 9 and Fig. 10.
+A.3.1 Qualitative Results
+
+RefCOCO
+
+lady in white
+
+giraffe on the left
+
+RefCOCO+
+
+darker jeans
+
+closest zebra
+
+RefCOCOg
+standing woman in a red dress
+
+ReferItGame the sky
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. woman (0.74) 2. lady (0.56) 3. girl (0.43) 4. white (0.07) 5. black (0.06)
+
+1. animal (0.28) 2. guy (0.14) 3. red (0.13) 4. brown (0.11) 5. baby (0.09)
+
+1. blue (0.99) 2. shirt (0.10) 3. guy (0.09) 4. black (0.02) 5. woman (0.01)
+
+1. animal (0.36) 2. white (0.14) 3. black (0.06) 4. player (0.02) 5. shirt (0.01)
+
+1. woman (0.80) 2. girl (0.52) 3. blonde (0.03) 4. red (0.03) 5. empty (0.01)
+
+1. biker (0.54) 2. van (0.47) 3. people (0.45) 4. walkway (0.43) 5. brick (0.21)
+
+woman in black
+
+red van
+
+man with bat
+
+tallest giraffe
+
+man standing with back toward camera
+
+the pool
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. guy (0.54) 2. black (0.30) 3. shirt (0.17) 4. boy (0.06) 5. dark (0.05)
+
+1. red (0.98) 2. brown (0.02) 3. shirt (0.01) 4. white (0.01) 5. yellow (0.01)
+
+1. batter (0.99) 2. player (0.63) 3. white (0.04) 4. shirt (0.01) 5. black (0.01)
+
+1. white (0.10) 2. whole (0.08) 3. guy (0.07) 4. part (0.05) 5. shirt (0.04)
+
+1. boy (0.61) 2. white (0.03) 3. blue (0.03) 4. guy (0.02) 5. woman (0.02)
+
+1. pool (0.16) 2. sea (0.10) 3. pavement (0.06) 4. sand (0.05) 5. sign (0.03)
+
+Figure 5. Qualitative results of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+11
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+RefCOCO
+
+woman sitting down
+
+suitcase back right
+
+RefCOCO+
+
+the girl wearing shorts
+
+beverage tan in color
+
+RefCOCOg
+the guy in the grey shirt
+
+ReferItGame sky white top
+
+1. woman (0.81) 2. girl (0.64) 3. lady (0.33) 4. shirt (0.09) 5. guy (0.03)
+
+1. bag (0.57) 2. black (0.32) 3. gray (0.18) 4. side (0.07) 5. green (0.06)
+
+1. woman (0.98) 2. girl (0.79) 3. white (0.02) 4. lady (0.01) 5. shirt (0.01)
+
+1. white (0.38) 2. blue (0.12) 3. glass (0.03) 4. brown (0.01) 5. shirt (0.001)
+
+1. boy (0.78) 2. white (0.48) 3. guy (0.32) 4. kid (0.03) 5. back (0.01)
+
+1. ceiling (0.76) 2. people (0.24) 3. brick (0.09) 4. stair (0.07) 5. girl (0.06)
+
+dude eating pizzas face
+
+pizza in back
+
+guy in the black shirt and jeans
+
+partial end of vehicle
+
+a dinner table filled with meals
+
+man middle red
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. white (0.41) 2. guy (0.37) 3. woman (0.27) 4. lady (0.17) 5. shirt (0.07)
+
+1. food (0.87) 2. plate (0.4) 3. white (0.11) 4. corner (0.06) 5. guy (0.05)
+
+1. black (0.99) 2. shirt (0.67) 3. guy (0.62) 4. blue (0.005) 5. girl (0.004)
+
+1. guy (0.02) 2. white (0.02) 3. gray (0.02) 4. black (0.02) 5. partial (0.01)
+
+1. table (0.89) 2. wooden (0.40) 3. brown (0.17) 4. green (0.08) 5. yellow (0.02)
+
+1. girl (0.41) 2. guy (0.39) 3. people (0.03) 4. anyone (0.02) 5. sign (0.02)
+
+Figure 6. Qualitative results of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+12
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+RefCOCO
+
+man in black on skis
+
+bananas front row third from left
+
+RefCOCO+
+
+white shirt
+
+fuzzy food
+
+RefCOCOg
+a clock on the tower
+
+ReferItGame
+building on the left
+
+1. guy (0.36) 2. skier (0.19) 3. blue (0.06) 4. woman (0.05) 5. black (0.04)
+
+1. white (0.28) 2. yellow (0.16) 3. guy (0.13) 4. face (0.07) 5. black (0.07)
+
+1. shirt (0.93) 2. boy (0.91) 3. white (0.62) 4. gray (0.21) 5. guy (0.05)
+
+1. blurry (0.99) 2. food (0.06) 3. guy (0.03) 4. white (0.02) 5. blue (0.01)
+
+1. side (0.39) 2. green (0.18) 3. visible (0.08) 4. black (0.06) 5. grey (0.01)
+
+1. building (0.94) 2. people (0.24) 3. sigh (0.23) 4. kid (0.20) 5. birck (0.18)
+
+bro on the right in the air
+
+back of chair on right with bag on it
+
+guy in back
+
+partial doughnut alone
+
+a dark brown chair under a shelf
+
+middle of lake
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. leg (0.38) 2. guy (0.31) 3. black (0.26) 4. girl (0.05) 5. woman (0.03)
+
+1. white (0.23) 2. side (0.08) 3. red (0.07) 4. girl (0.05) 5. brown (0.04)
+
+1. black (0.96) 2. guy (0.85) 3. shirt (0.22) 4. white (0.01) 5. woman (0.001)
+
+1. red (0.02) 2. black (0.01) 3. brown (0.01) 4. guy (0.01) 5. half (0.004)
+
+1. brown (0.63) 2. wooden (0.41) 3. white (0.05) 4. girl (0.01) 5. black (0.01)
+
+1. wave (0.75) 2. sea (0.30) 3. step (0.10) 4. foreground (0.08) 5. walkway (0.07)
+
+Figure 7. Qualitative results of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+13
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+RefCOCO
+
+guy in gray shirt standing
+
+left half of sandwich
+
+RefCOCO+
+
+red jacket
+
+yellow car
+
+RefCOCOg
+a beige horse with a black and yellow saddle
+
+ReferItGame girl
+
+1. guy (0.91) 2. shirt (0.07) 3. old (0.05) 4. black (0.02) 5. white (0.02)
+
+1. half (0.80) 2. food (0.15) 3. brown (0.09) 4. black (0.05) 5. woman (0.04)
+
+1. jacket (0.99) 2. red (0.97) 3. coat (0.71) 4. guy (0.06) 5. woman (0.03)
+
+1. yellow (0.37) 2. brown (0.17) 3. red (0.11) 4. part (0.03) 5. white (0.03)
+
+1. brown (0.61) 2. white (0.37) 3. black (0.04) 4. young (0.03) 5. girl (0.01)
+
+1. girl (0.56) 2. lady (0.32) 3. face (0.24) 4. guy (0.22) 5. people (0.06)
+
+man with watch
+
+elephant at far left
+
+hoodie black near orange shirt
+
+bowl of salad
+
+black and white floral pattern patio chair
+
+man in white shirt
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. guy (0.70) 2. shirt (0.53) 3. blue (0.44) 4. old (0.14) 5. gray (0.09)
+
+1. baby (0.29) 2. partial (0.14) 3. red (0.13) 4. shirt (0.12) 5. guy (0.11)
+
+1. black (0.99) 2. shirt (0.68) 3. guy (0.54) 4. white (0.18) 5. woman (0.02)
+
+1. white (0.84) 2. green (0.79) 3. food (0.05) 4. yellow (0.02) 5. black (0.01)
+
+1. black (0.88) 2. white (0.10) 3. blue (0.02) 4. woman (0.01) 5. monitor (0.01)
+
+1. people (0.64) 2. lady (0.17) 3. guy (0.16) 4. girl (0.10) 5. face (0.02)
+
+Figure 8. Qualitative results of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+14
+
+A.3.2 Failure Cases
+
+RefCOCO
+
+woman on bike
+
+right cake
+
+RefCOCO+
+
+girl with hand on her side
+
+gray elephant
+
+RefCOCOg
+green color kite holding the man
+
+ReferItGame door 2nd right
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. guy (0.56) 2. bike (0.20) 3. old (0.10) 4. woman (0.08) 5. brown (0.07)
+
+1. part (0.35) 2. side (0.24) 3. brown (0.18) 4. corner (0.10) 5. area (0.08)
+
+1. woman (0.93) 2. black (0.71) 3. girl (0.60) 4. shirt (0.13) 5. blue (0.04)
+
+1. animal (0.81) 2. white (0.09) 3. girl (0.04) 4. full (0.03) 5. black (0.03)
+
+1. green (0.37) 2. dark (0.04) 3. blue (0.03) 4. plant (0.02) 5. wooden (0.01)
+
+1. face (0.63) 2. stair (0.39) 3. doorway (0.18) 4. building (0.16) 5. step (0.14)
+
+white mask
+
+rightmost plate
+
+woman in blue
+
+zebra at tree
+
+a brick oven with boxes under it
+
+ocean waves
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. white (0.59) 2. guy (0.59) 3. shirt (0.57) 4. woman (0.09) 5. black (0.08)
+
+1. food (0.86) 2. part (0.10) 3. corner (0.07) 4. guy (0.06) 5. woman (0.03)
+
+1. woman (0.97) 2. girl (0.95) 3. lady (0.13) 4. pink (0.13) 5. shirt (0.02)
+
+1. full (0.80) 2. whole (0.05) 3. woman (0.04) 4. black (0.03) 5. number (0.03)
+
+1. white (0.37) 2. glass (0.07) 3. woman (0.07) 4. empty (0.07) 5. black (0.03)
+
+1. sea (0.28) 2. sand (0.06) 3. wave (0.05) 4. people (0.03) 5. pool (0.02)
+
+Figure 9. Some failure cases of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+15
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+RefCOCO
+
+man back of lady
+
+white board
+
+RefCOCO+
+
+row 2 glasses head turned
+
+half cut sandwich
+
+RefCOCOg a yellow bus
+
+ReferItGame
+blue building near right of statue
+
+1. guy (0.72) 2. old (0.13) 3. woman (0.12) 4. shirt (0.08) 5. glass (0.04)
+
+1. board (0.58) 2. white (0.28) 3. red (0.17) 4. yellow (0.11) 5. pink (0.03)
+
+1. guy (0.71) 2. black (0.10) 3. white (0.09) 4. jacket (0.09) 5. woman (0.01)
+
+1. half (0.87) 2. slice (0.02) 3. guy (0.02) 4. part (0.01) 5. red (0.01)
+
+1. white (0.33) 2. black (0.05) 3. green (0.04) 4. grey (0.01) 5. red (0.003)
+
+1. stair (0.57) 2. building (0.37) 3. doorway (0.33) 4. people (0.33) 5. yup (0.28)
+
+girl carrying board
+
+top kitty
+
+guy walking to skater
+
+horse under man in blue shirt
+
+a goat stand near security
+
+man on right with hat
+
+Top-5 Attributes Visual Attention Predictions Exps
+
+1. guy (0.85) 2. black (0.16) 3. hand (0.05) 4. boy (0.04) 5. kid (0.03)
+
+1. black (0.58) 2. gray (0.18) 3. part (0.15) 4. white (0.15) 5. guy (0.05)
+
+1. guy (0.91) 2. kid (0.10) 3. shirt (0.06) 4. boy (0.06) 5. white (0.02)
+
+1. black (0.99) 2. white (0.01) 3. guy (0.01) 4. kid (0.004) 5. animal (0.003)
+
+1. white (0.99) 2. grey (0.01) 3. brown (0.01) 4. young (0.003) 5. black (0.003)
+
+1. people (0.66) 2. girl (0.22) 3. lady (0.14) 4. sand (0.13) 5. step (0.06)
+
+Figure 10. Some failure cases of the referring expression comprehensions with the corresponding visual attention heat maps and top-5 predicted attributes. The red rectangles denote the ground-truth bounding boxes, while the yellow ones denote the predicted boxes by our SSG. The green dots indicate the center points of the ground-truth bounding boxes.
+
+16
+

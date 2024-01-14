@@ -1,0 +1,558 @@
+Zero-Shot Grounding of Objects from Natural Language Queries
+Arka Sadhu1 Kan Chen2† Ram Nevatia1 1University of Southern California 2Facebook Inc.
+{asadhu|nevatia}@usc.edu kanchen18@fb.com
+
+arXiv:1908.07129v1 [cs.CV] 20 Aug 2019
+
+Abstract
+A phrase grounding system localizes a particular object in an image referred to by a natural language query. In previous work, the phrases were restricted to have nouns that were encountered in training, we extend the task to ZeroShot Grounding(ZSG) which can include novel, “unseen” nouns. Current phrase grounding systems use an explicit object detection network in a 2-stage framework where one stage generates sparse proposals and the other stage evaluates them. In the ZSG setting, generating appropriate proposals itself becomes an obstacle as the proposal generator is trained on the entities common in the detection and grounding datasets. We propose a new single-stage model called ZSGNet which combines the detector network and the grounding system and predicts classiﬁcation scores and regression parameters. Evaluation of ZSG system brings additional subtleties due to the inﬂuence of the relationship between the query and learned categories; we deﬁne four distinct conditions that incorporate different levels of difﬁculty. We also introduce new datasets, sub-sampled from Flickr30k Entities and Visual Genome, that enable evaluations for the four conditions. Our experiments show that ZSGNet achieves state-of-the-art performance on Flickr30k and ReferIt under the usual “seen” settings and performs signiﬁcantly better than baseline in the zero-shot setting.
+1. Introduction
+Detecting objects in an image is a fundamental objective of computer vision. A variation of this task is phrase grounding (also called visual grounding and referring expressions) where the objective is to detect objects referenced by noun phrases in a text query [7, 19, 40, 45]. It can be directly applied to other tasks such as visual question answering [1, 51] and image retrieval [5] and has thus garnered wide interest.
+While existing phrase grounding systems accept novel query phrases as inputs, they are limited to the nouns en-
+†This work was done while the author was at USC.
+
+(a) red car
+
+(b) blue shirt
+
+(c) blue car
+
+(d) blue chair (e) red minivan (f) silver moped Figure 1. Illustration of the key difference between current scope of phrase grounding and the proposed zero-shot grounding. The query word is italicized in all cases. (a)-(f) denote the image-query pairs input to the system. (a) and (b) are examples of training images. A test image query pair for phrase grounding could be (c). Zero-shot grounding additionally can be tested on (d), (e) and (f) in which “chair”, “minivan” and “moped” are object categories not annotated in the training data. (f) additionally contains a “car” object which is a trained category, indicating that both novel and related trained category objects may be present in a test image.
+countered in the training data (i.e. the referred object types need to have been “seen” in training images before). As an important extension, we deﬁne zero-shot grounding (ZSG) to allow the use of phrases with nouns that the grounding system has not encountered in training set before. Fig 1 illustrates this concept with examples.
+To enable grounding of novel object categories, we need to relate the appearance of referred objects to their linguistic descriptions. Current, state-of-art phrase grounding systems [7, 9, 34, 45, 49] rely on an explicit object detector to obtain proposed object bounding boxes and their ROIpooled features as a pre-processing step. This essentially limits these systems to a ﬁxed set of object categories that the detector was trained on. In ZSG, we need to have a reasonable proposal box for the novel object, classify it as a foreground and regress the box to be a more accurate spatial ﬁt. In traditional phrase grounding, a key challenge is to dis-
+
+ambiguate between similar objects using the query phrase, but ZSG requires us to also ﬁrst ﬁnd likely image regions that may contain the referenced objects.
+To address the above issues, we replace the traditional two-stage approach, where the ﬁrst stage generates proposal bounding boxes and the second stage does the classiﬁcation, by a single-stage network with dense proposals; we call this network ZSGNet. It takes combined language query features and visual features from the image proposals and predicts classiﬁcation scores and regression parameters. The system is trained directly on the grounding training data, in an end-to-end manner, and does not utilize any externally trained object detector. We show that, besides enabling grounding of novel categories, it does not degrade performance on learned categories even though our method does not utilize external training data. Moreover, our design is computationally efﬁcient especially during inference owing to its single-stage architecture akin to SSD [29].
+Evaluating the performance of a ZSG method is complex due to the inﬂuence of the relationship of the new query category to the learned categories. To make the evaluations and distinctions clearer, we deﬁne four speciﬁc cases for different conditions: (i) when the query word is novel (Fig 1 d-f) (ii) when the referred object belongs to a novel category (Fig 1-d) (iii) when the referred object is “similar” to objects seen during training but none of the latter are present (Fig 1-e) (iv) when at least one similar object also exists in the test image (Fig 1-f)(more details in Section 3.1).
+To support evaluation of zero-shot grounding for the four cases, we introduce new datasets which are sub-sampled from the existing Visual Genome [23] and Flickr30k Entities [35]. We create examples of the four cases outlined above (dataset creation details are in Section 4.1, experiments on these datasets are in Section 4.5).
+Our contributions can be summarized as follows: (i) we introduce the problem of Zero-shot grounding, (ii) we propose a simple yet effective architecture ZSGNet to address limitations of current phrase grounding systems for this task, (iii) we create new datasets suitable for evaluating zero-shot grounding and (iv) we evaluate performance on these datasets and show the effectiveness of our approach. Our code and datasets are publicly released1.
+2. Related Work
+Phrase grounding: Extensive work in creating grounding datasets like Flickr30k, ReferIt, RefCoCo, RefCoCo+, RefCoCog, Visual Genome, GuessWhat [8, 20, 23, 31, 35, 44, 46] have been crucial to the success of phrase grounding. Early works use reconstruction based approach [40] or integrate global context with the spatial conﬁgurations [19]. Recent approaches [7, 34, 49] learn directly in the multi-
+1https://github.com/TheShadow29/zsgnet-pytorch
+
+modal feature space and use attention mechanisms [9, 45] which have also been extended to phrase grounding in dialogue systems [8, 52]. Few approaches also look at unsupervised learning using variational context [50] and semisupervised learning via gating mechanisms [6].
+Above techniques use an object detector like FasterRCNN [39] or MaskR-CNN [15] as a pre-processing step to get the bounding boxes and ROI-pooled features which effectively limits them to the object categories of the detector. We combine the detection and the grounding networks and learn directly from the grounding dataset and thus no preprocessing step is involved.
+Multi-modal feature representation has many ﬂavors like linear transformation, concatenation, hadamard product [21], bilinear pooling [28] and have shown success in vision-language tasks like VQA [3, 4, 13, 47, 48], Scene Graph Generations [25, 43] and Image Captioning [30]. We stick to feature concatenation for simplicity and a fair comparison with previous works in phrase grounding.
+Single stage networks used in object detection are popular for their real-time inference speed. Prominent works include SSD [29], YOLO [36–38] and more recently FPN [26] and RetinaNet [27]. In this work, we combine a singlestage detection network directly into the grounding framework; besides enabling zero-shot grounding, it also results in highly efﬁcient inference.
+Zero-shot grounding is unexplored but there are a few similar works. [14] aims at open-vocabulary object retrieval though it still assumes the entity of the referred object is seen at train time. Recently [2] proposed zero-shot detection (ZSD) where they consider a set of unseen classes for which no bounding box information at train time. At test time, all the objects including the unseen classes must be detected. However, the set of background classes is needed prior to training, but this is not needed in ZSG.
+3. Design Considerations for ZSG
+We ﬁst discuss the zero-shot grounding cases and then describe the limitations in extending current phrase grounding systems to ZSG. Finally, we present a new architecture to address the limitations.
+3.1. ZSG Cases
+We now describe the four cases for zero-shot grounding in detail. For brevity, we use the notations in Table 1. Each case deﬁnes the scope for what is classiﬁed as a zero-shot grounding example. Further, we assume that Q (the word which refers to the object in the image) is not an OOV (out of vocabulary word) which is reasonable if we use word embeddings which are trained on a large language corpus. Case 0: Q ∈/ W . The query noun, Q, is not included in any training example before. We only look at the lemmatized word so synonyms are considered to be different
+
+Notation T P A Q B
+C
+W
+
+Meaning Test Image Test query phrase Referred object at test time Word in P referring to A Set of objects close to A and seen during training Set of categories seen during training Set of words seen during training
+
+Example Fig 1-(f) silver moped Moped moped
+{Car}
+{Vehicles, Clothing} {red, blue, car, shirt}
+
+Table 1. Notations used to describe ZSG with examples (Fig 1). By close objects we mean their word embeddings are similar.
+
+(novel) words. Fig 1(d)-(f) are examples of this case. Fig 1-c with the phrase “blue automobile” would also be considered zero-shot since we haven’t seen the word automobile before even though it is a synonym of “car”. Case 1: A ∈/ C. Here, we assume that objects seen at train time belong to a set of pre-deﬁned categories and the referred object A doesn’t belong to these categories. In Fig 1-d, “chair” is considered zero-shot as this category was not seen at train time. Case 2: ∃B but ∀b ∈ B we have b ∈/ T . Here, objects that are semantically close (similar) to the referred object A are present in the training set but not in the test image. Fig 1-e is an example as “minivan” (novel object) is semantically close to “car” (seen in train set) but there is no other similar object like “car” in the test image. Case 3: ∃B and ∃b ∈ B such that b ∈ T . Same as Case 2 but at least one of the objects semantically close (similar) to A is also present in the test image. For example, Fig 1-f containing “moped” (a novel object) and “car” (seen in the training set) which are semantically close.
+For Case 2 and Case 3, there can be multiple interpretations for being “semantically close”. Here, we assume two objects are “close” if their word embeddings are similar. In our implementation, we cluster the word embeddings of the objects and objects belonging to the same cluster are considered semantically close (more details in Section 4.1).
+3.2. Limitations in Phrase Grounding Systems
+Prior works view phrase grounding either as an entity selection problem [9,45] or that of regressing sparse proposals to a tighter bounding box [7,34,49]. In either case, given an image I, we have N candidate boxes and their ROI-pooled features {oi}Ni=1. Given a query phrase P , the problem reduces to ﬁnding a good candidate box with a possible additional regression step.
+Grounding systems using this framework don’t have a mechanism to generalize to object categories not in the detection dataset. Consider a novel category X whose in-
+
+Stage 1
+
+Pre-trained Proposal Generator
+
+Proposal generation and Feature Extraction
+
+Stage 2 Image
+
+Proposal Features
+
+Stage 1
+
+LSTM
+Query
+
+Language Feature
+
+Regression & Classification
+
+(a) Vanilla 2-stage phrase grounding system
+
+CNN
+Image
+Anchor Generator
+
+Image Feature Map
+Anchor boxes
+
+Regression & Classification
+
+Query
+
+LSTM
+
+Language Feature
+
+(b) Our 1-stage phrase grounding system
+
+Figure 2. Previous phrase grounding systems (a) produce a small subset of proposals without considering the query restricting it to the entities of the detection network. Our system (b) considers dense proposals, looks at the query to disambiguate and learns directly from grounding dataset
+
+stances may be present in the training images but not annotated. The object detector learns to classify X as background and this error is propagated to the grounding system. [7, 34] suggest ﬁne-tuning the detector on the grounding categories (entities) but the grounding datasets are not densely annotated, i.e. not all object instances of X in every image are annotated. Additionally, some grounding datasets like ReferIt [20] don’t have entity information so ﬁne-tuning is not feasible.
+Object detectors also favor features invariant to intraclass changes but grounding systems need to capture intraclass variations as well.
+3.3. Model Design
+We propose the following new formulation: Given an image I with ﬁxed candidate boxes (also called anchor boxes or dense proposals) DP = [dp1, . . . dpN ] and a query phrase P , the task is to choose the best candidate box dpi and regress it to a tight bounding box bi. Since our candidate boxes depend only on the size of the image, we can use any image encoder to compute the visual features at runtime and remove the need for a pre-trained object detector as illustrated in Fig 2. This design is similar to single-shot architecture used in object detection [27, 29].
+Framework: Our model consists of a language module to encode the query phrase, a visual module to obtain image feature maps followed by fully convolutional networks to output a 5d vector (for each candidate box) one for score
+
+FCN CNN
+
+K Image Feature Maps at different scales
+
+Channel-wise Concatenation
+
+Binary Classification (Focal Loss)
+
+Size, Ratio, Scale
+
+Anchor Generator
+
+Anchor Information
+
+Anchor Centers
+
+Multi-Modal Features
+
+Query: “Dolphin jumping out of water”
+
+Bi-LSTM
+
+Language Features
+
+Regression (Smooth L1 Loss)
+
+Figure 3. A schematic of the ZSGNet Architecture. Input to the system is an image-query pair. A deep network is used to produce K image feature maps taken at different resolutions. The anchor generator uses the image size to produce anchors at different scales and resolution. We append the anchor centers at each cell of each feature map. The query phrase is encoded using a bidirectional LSTM (Bi-LSTM) and the language feature obtained is appended at every cell location of every feature map along the channel dimension. The resulting multi-modal feature maps are input to a Fully Convolution Network (FCN) block to output a prediction score and regression parameters which are trained using focal-loss (Lpred)) and SmoothL1-loss(Lreg)) respectively.
+
+and the rest for regressing to a tighter bounding box. Fig 3
+provides an overview of our proposed architecture.
+ZSGNet directly learns about the entities in a grounding
+dataset in an end-to-end fashion. Moreover, since a query
+phrase refers to a particular object with possibly different
+attributes, the visual features are no longer invariant to intra-
+class changes. This way, we address the limitations posed
+by previous systems. Finally, owing to its single-stage ap-
+proach, the network is computationally efﬁcient. Language module consists of an embedding layer fol-
+lowed by a Bi-LSTM [17, 42] to encode the input query phrase. Given a query phrase P = {wi}ni=1 we use GloVe vectors [33] to encode each word in P as word embedding vectors {wi}ni ∈ Rdq , where dq is the dimension of the embedding vector. These are fed into a Bi-LSTM [17, 42]. We use the normalized last hidden state vector {hˆ} ∈ R2dl of Bi-LSTM as the query feature, where dl is the dimension of the hidden layer of a single LSTM.
+Visual Module consists of an image encoder to produce K feature maps {vi}Ki=1 at different resolutions. We use ResNet-50 [16] with FPN [26] as our default image encoder.
+We ﬁrst normalize the visual feature maps along the chan-
+nel dimension. Then we expand the language feature to the
+same dimensions of the visual feature maps and concatenate
+it along the channel dimension for each normalized visual feature map vˆi. Finally, we append the normalized locations of the feature maps (Cx, Cy = [cx/W, cy/H]) along the channel dimension to aid in location based grounding
+(phrases which contain location information) and obtain the multi-modal feature maps mi. At a particular index of the ith feature map (indexed by x, y) we have
+
+mi[x, y] = [vˆi[x, y]; hˆ; Cx; Cy]
+
+(1)
+
+where ; denotes the concatenation operation.
+
+Anchor Matching Following [27] we match 9 candidate boxes to every index of a feature map. We use a fully convolutional network (FCN) to process the multi-modal features to output a 5 dimensional output (score and regression parameters) for each box. In the anchor matching step, we use an IoU threshold of 0.5 (found ideal via experimentation).
+Loss Function For the binary classiﬁcation into foreground and background we use the focal loss as described in [27]. For regressing to a tighter box we use the same encoding scheme as [39] with smooth-L1 loss.
+Let dpj denote the jth anchor and gt denote the ground truth bounding box. Let
+
+gdpj = 1IoU (dpj ,gt)≥0.5
+
+(2)
+
+G = {gdpj |gdpj = 1}
+
+(3)
+
+Here 1 denotes the indicator random variable. Thus, gdpj = 1 means the candidate box dpj matches with the ground-truth box and G is the set of all such candidate boxes. Now denoting focal loss [27] with default parameters (α = 0.25,γ = 2) by LF and the predicted score for the box dpj as pdpj we get
+
+|DP |
+
+1
+
+Lpred = |G|
+
+LF (pdpj , gdpj )
+
+(4)
+
+j=1
+
+Similarly, denoting SmoothL1-loss by LS, the predicted regression parameters by rdpj and the ground-truth regression parameters by gtdpj we get
+
+|DP |
+
+1
+
+Lreg = |G|
+
+gdpj LS (rdpj , gtdpj )
+
+(5)
+
+j=1
+
+The ﬁnal loss is calculated as L = Lpred + λLreg. Here λ is a hyper-parameter (we set λ = 1).
+
+Training: We match the candidate boxes (anchors) to each feature map generated by the feature encoder. We classify each candidate box as a foreground or a background using a prediction loss (Lpred) and regress it to get a tighter box (Lreg). Foreground means that the candidate box shares IoU ≥ 0.5 with the ground truth box. For the regression loss we only consider the foreground candidate boxes.
+Testing At test time, we choose the candidate box with the highest score and use its regression parameters to obtain the required bounding box.
+4. Experiments
+This section describes the dataset construction methods, followed by experiments and visualization.
+4.1. Dataset Construction
+We sub-sample Flickr30k [35] and Visual Genome [23] to create datasets for the cases described in Section 3.1.
+Flickr30k Entities contains 5 sentences per image with every sentence containing 3.6 queries and has bounding box information of the referred object and its category (e.g. “people”, “animal”).
+Visual Genome (VG) has a scene graph for every image. The objects in the scene-graph are annotated with bounding boxes, region description and a synset (obtained from [32]).
+We brieﬂy describe the steps taken to create the ZSG datasets (more details can be found in the supplementary material). We follow the notation described in Table 1.
+Case 0 is sampled from Flickr30k Entities [35]. We need to ensure that Q ∈/ W . For this, we ﬁrst obtain lemmatized representation of the query words. As the query phrases are noun-phrases of a complete annotated sentence, the query word Q referring to the noun is almost always the last word of the query phrase P , we take it be so. We do a 70:30 split of the extracted words to obtain “included” and “excluded” word lists respectively. We then create a training set from the included list and validation and tests from the excluded list, removing images that have overlap between train, validation or test lists. We call the resulting split Flickr-Split-0.
+Case 1 is also sampled from Flickr30k Entities [35] but this time we also the use predeﬁned entity information. We need the referred object A to belong to a category which is not in C. Flickr30k has 7 common object categories (e.g. “people”, “animals”) and one category called “other” for objects which do not belong to the seven categories. We take images with “other” objects and split them evenly to create validation and test sets, The remaining images comprise the train set; we remove any box annotations that belong to the “other” category to create Flickr-Split-1.
+Case 2 and Case 3 are sampled from Visual Genome [23]. In addition to region phrases, visual genome also provides entity names mapped to synsets in wordnet [32]. We count all the objects present in the dataset, choose
+
+topI(= 1000) objects and get their word embeddings, skipping without an embedding (we use GloVe [33] trained on common crawl corpus). We apply K-Means clustering (K = 20) to cluster similar words. We sort the words in each cluster k by their frequency in the dataset and take the top half to be in the seen objects set (Sk) and the bottom half to be in the unseen objects set (Uk). If an image contains an object oi such that oi ∈ Uk and another object oj ∈ Sk then it is an example of Case 3. If no such oj exists then it is Case 2. Finally, we take the union of images of the two cases to constitute the test set. We call the resulting splits VG-Split-2 and VG-Split-3. This design ensures that for both Cases 2 and 3 the referred object A (in the test set) has a set of objects B (in the training set) which are in the same semantic cluster.
+We consider the remaining images to be candidates for the training set and include them if they contain at least one object oi in S (where S = ∪kSk) and remove the annotations for any object oj ∈ U (where U = ∪kUk). This ensures that the training set contains objects in S and does not contain any objects in U . However, such a training set turns out to be extremely imbalanced with respect to the clusters as clusters containing common entities such as “person” are much more prevalent than clusters containing “cakes”. We balance the training set following a simple threshold based sampling strategy (details in supplementary material) which results in most clusters (except 2) to have similar number of query phrases. We follow the same strategy to create balanced test splits of VG-Split-2 and VG-Split-3.
+Dataset Caveats: (i) We note that polysemy is not taken care of i.e. the same word can have different meanings. (ii) Neither Visual Genome nor Flickr30k is a true referring expressions dataset i.e. the query phrase may not always uniquely identify an object.
+4.2. Datasets Used
+Flickr30k Entities [35] contains 30k images each with 5 sentences and each sentences has multiple query phrases. We use the same splits used in [7, 19, 40].
+ReferIt(RefClef) [20] is a subset of Imageclef [11] containing 20k images with 85k query phrases. We use the same split as [7, 19, 40].
+Flickr-Split-0 We create an unseen split of Flickr30k based on the method outlined in Section 4.1. It contains 19K train images with 11K queries, 6K validation images with 9K queries and 6K test images with 9K queries.
+Flickr-Split-1 This split of Flickr30k has “other” category only in the validation and test images. It contains 19k training images with 87k query phrases and 6k images with 26k query phrases for validation and test each.
+VG-Split We use a balanced training set (as described in Section 4.1) containing 40K images and 264K query phrases. We use a subset (25%) for validation. VG-Split-2
+
+contains 17K images and 23K query phrases in the unbalanced set, 10K images and 12K query phrases in the balanced set. VG-Split-3 contains 41K images with 68K query phrases in the unbalanced set, 23K images and 25K query phrases in the balanced set.
+4.3. Experimental Setup
+Evaluation Metric: We use the same metric as in [7]. For each query phrase, we assume that there is only one ground truth bounding box. Given an image and a query phrase if the IoU of our predicted bounding box and the ground truth box is more than 0.5 we mark it as correct. However, in the case of Visual Genome splits, the annotations are not precise so we use 0.3 as the threshold. The ﬁnal accuracy is averaged over all image query phrase pairs.
+Baselines: To explicitly compare the performance of dense proposals, we create a new baseline QRG based on QRC [7] which uses GloVe embeddings instead of embeddings learned from the data. We benchmark it on Flickr30k to show there is no drop in performance compared to QRC. We further use it as a strong baseline on the unseen splits. In all cases, we use a fasterR-CNN [39] pretrained on PascalVOC [12] and ﬁne-tune it on the target dataset. For FlickrSplit-0 we ﬁne-tune on all the entities, for Flickr-Split-1 we ﬁne-tune on all entities except “other”. We use the top100 box predictions provided by the ﬁne-tuned network after applying non-maxima suppression to be consistent with implementation in [7]. For VG-Split, we train on all the seen-classes, i.e. union of all seen objects in every cluster (∪kSk). In this case, we don’t use non-maxima suppression and instead consider all the 300 boxes provided by the ﬁne-tuned region-proposal network.
+Implementation details: We train ZSGNet and baseline models till validation accuracy saturates and report our values on the test set. We found Adam [22] with learning rate 1e−4 for 20 epochs to be sufﬁcient in most cases. For ZSGNet, to generate image feature maps at different scales, we use two variations: (i) SSD [29] with VGG network (ii) RetinaNet [27] with Resnet-50 [16] network. Note that these are not pretrained on any detection dataset. Initially, we resize the image to 300×300 for faster training and later retrain with image sizes 600 × 600 which gives a consistent 2 − 3% improvement. We note that while image augmentations (like horizontal ﬂipping) are crucial for object detectors it is harmful for grounding as the query phrases often have location information (like “person standing on the left”, “person to the right of the tree”).
+4.4. Results on Existing Grounding datasets
+Table 2 compares ZSGNet with prior works on Flickr30k Entities [35] and ReferIt [20]. We use “det” and “cls” to denote models using Pascal VOC [12] detection weights and ImageNet [10, 41] classiﬁcation weights. Networks marked
+
+Method SCRC [19] GroundeR (cls) [40] GroundeR (det) [40] MCB (det) [13] Li (cls) [24] QRC* (det) [7] CITE* (cls) [34] QRG* (det) ZSGNet (cls) ZSGNet (cls)
+
+Net VGG VGG VGG VGG VGG VGG VGG VGG VGG Res50
+
+Flickr30k 27.8 42.43 48.38 48.7 60.21 61.89 60.1 60.12 63.39
+
+ReferIt 17.9 24.18 28.5 28.9 40 44.1 34.13 53.31 58.63
+
+Table 2. Comparison of our model with other state of the art methods. We denote those networks which use classiﬁcation weights from ImageNet [41] using “cls” and those networks which use detection weights from Pascal VOC [12] using “det”. The reported numbers are all Accuracy@IoU = 0.5 or equivalently Recall@1. Models marked with “*” ﬁne-tune their detection network on the entities in the Flickr30k.
+
+with “*” ﬁne-tune their object detector pretrained on PascalVOC [12] on the ﬁxed entities of Flickr30k [35].
+However, such information is not available in ReferIt dataset which explains ∼ 9% increase in performance of ZSGNet over other methods. This shows that our model learns about the entities directly from the grounding dataset.
+For Flickr30k we also note entity-wise accuracy in Table 3 and compare against [7, 34]. We don’t compare to the full model in [7] since it uses additional context queries from the sentence for disambiguation. As these models use object detectors pretrained on Pascal-VOC [12], they have somewhat higher performance on classes that are common to both Flickr30k and Pascal-VOC (“animals”, “people” and “vehicles”). However, on the classes like “clothing” and “bodyparts” our model shows much better performance; likely because both “clothing” and “bodyparts” are present along with “people” category and so the other methods choose the “people” category. Such biases are not exhibited in our results as our model is category agnostic.
+4.5. Results on ZSG Datasets
+Table 4 shows the performance of our ZSGNet model compared to QRG on the four unseen splits described in Section 4.1 and 4.2. Across all splits, ZSGNet shows 4−8% higher performance than QRG even though the latter has seen more data (the object detector is pretrained on Pascal VOC [12]). Next, we observe that the accuracy obtained on Flickr-Split-0,1 are higher than the VG-split likely due to larger variation of the referred objects in Visual Genome. Finally, the accuracy remains the same across the balanced and unbalanced sets indicating the model performs well across all clusters as our training set is balanced.
+We also study the relationship between accuracy and the
+
+Method QRC - VGG(det) CITE - VGG(det) ZSGNet - VGG (cls) ZSGNet - Res50 (cls)
+
+Overall 60.21 61.89 60.12 63.39
+
+people 75.08 75.95 72.52 73.87
+
+clothing 55.9 58.50 60.57 66.18
+
+bodyparts 20.27 30.78 38.51 45.27
+
+animals 73.36 77.03 63.61 73.79
+
+vehicles 68.95 79.25 64.47 71.38
+
+instruments 45.68 48.15 49.59 58.54
+
+Table 3. Category-wise performance with the default split of Flickr30k Entities.
+
+scene 65.27 58.78 64.66 66.49
+
+other 38.8 43.24 41.09 45.53
+
+Method QRG ZSGNet
+
+Net
+VGG VGG Res50
+
+FlickrSplit-0 35.62 39.32 43.02
+
+FlickrSplit-1 24.42 29.35 31.23
+
+VG-2B 0.3 0.5 13.17 7.64 17.09 11.02 19.95 12.90
+
+VG-2UB 0.3 0.5 12.39 7.15 16.48 10.55 19.12 12.37
+
+VG-3B 0.3 0.5 14.21 8.35 17.63 11.42 20.77 13.77
+
+VG-3UB 0.3 0.5 13.03 7.52 17.35 10.97 19.72 12.82
+
+Table 4. Accuracy across various unseen splits. For Flickr-Split-0,1 we use Accuracy with IoU threshold of 0.5. Since Visual Genome annotations are noisy we additionally report Accuracy with IoU threshold of 0.3. The second row denotes the IoU threshold at which the Accuracy is calculated. “B” and “UB” denote the balanced and unbalanced sets.
+
+Method 3-4
+
+Semantic Distances 4-5 5-6 6-7
+
+7-8
+
+# I-P 310 1050 3543 5321 1985
+
+VG
+
+QRG (Vgg)
+
+25.16 16.67 15.16 10.96 12.54
+
+2B
+
+ZSGNet (Vgg)
+
+28.71
+
+21.52
+
+19.02
+
+15.37
+
+14.76
+
+ZSGNet (Res50)
+
+31.94
+
+25.14
+
+21.99
+
+17.89
+
+17.98
+
+# I-P 974 3199 7740 9873 3765
+
+QRG VG (Vgg)
+
+23.1 20.13 14.73 12.19 11.24
+
+3B
+
+ZSGNet (Vgg)
+
+23.82
+
+25.73
+
+17.16
+
+16
+
+14.56
+
+ZSGNet (Res50)
+
+29.57
+
+27.85
+
+21.3
+
+18.77 16.71
+
+Table 5. Accuracy of various models on the balanced VG-Splits2,3 w.r.t the semantic distance of the referred object (A) to the closest object seen at train time. VG-2B and VG-3B refer to the balanced test set for Case2, 3. #I-P denotes the number of imagephrase pairs in the given semantic distance range.
+
+distance of the referred object at test time (A) from the training set. We re-use the clusters obtained while creating the VG-Split and consider the closest-seen object which lies in the same cluster as that of the referred object. For every unseen object (oi) in a particular cluster k (oi ∈ Uk) we ﬁnd the closest seen object in the same cluster oj = argminoj∈Sk dist(oi, oj). For dist calculation, we use the GloVe embeddings [33] corresponding to the objects and take the L2-norm of their difference. We group the distances into 5 intervals of unit length and report the accuracy of the subset where the distance of the referred object from the training set lies in that interval in Table 5.
+We note few examples of various intervals. We use the
+
+Model BM + Softmax
+BM + BCE BM + FL BM + FL + Img-Resize
+
+Accuracy on RefClef 48.54 55.20 57.13 61.75
+
+Table 6. Ablation study: BM=Base Model, softmax means we classify only one candidate box as foreground, BCE = Binary Cross Entropy means we classify each candidate box as the foreground or background, FL = Focal Loss, Img-Resize: use images of dimension 600 × 600
+
+notation (A, b) i.e. a tuple of the referred object and the closest object in the same cluster. Examples for the interval 3-4 are {(bouquet, ﬂower), (cupcake, cake), (tablecloth, curtain)} and for 7-8 are {(printer, paper), (notebook, pen), (tattoo, poster)}. As expected, the accuracy declines with the semantic distance but smoothly i.e. there is no sudden drop in performance.
+4.6. Ablation Study
+We show the performance of our model with different loss functions using the base model of ZSGNet on the validation set of ReferIt [20] in Table 6. Note that using softmax loss by itself places us higher than the previous methods. Further using Binary Cross Entropy Loss and Focal loss [27] give a signiﬁcant (7%) performance boost which is expected in a single shot framework. Finally, image resizing gives another 4% increase.
+4.7. Visualization
+To qualitatively analyze our model we show a few visualizations in Fig 4. The ﬁrst row shows grounding results on Flickr30k (ﬁrst, second column) and ReferIt (third, fourth column). Our model learns about the attribute(s) (“red”), location (“leftmost”) and entities (“cap”, “nightstand”) and
+
+a group of older men a red beanie cap rightmost animal nightstand between beds microphones
+
+a cigar
+
+a two-seat kayak
+
+a handstand
+
+couch
+
+countertop
+
+a rocky cliff (hill) large boulders (rock) stairway (wall)
+
+shorts (person)
+
+planter (plant)
+
+Figure 4. Few grounding visualizations. In all cases, red denotes the ground truth box; green is the box predicted by ZSGNet. Row1:Flickr30k, ReferIt; Row-2: Flickr-Split-0, 1; Row-3: VG-Split-2,3. In Row-3, the query word Q is emphasised and the closest seen object is provided in parenthesis. The last column shows incorrect predictions.
+
+predicts very tight bounding box. In the last column our model incorrectly predicts only one “microphone”.
+The second row shows Flickr-Split-0 (ﬁrst, second column) and Flickr-Split-1 (second, third column) predictions. The query phrases “cigar”, “kayak” are never encountered in the training set though close synonyms like “cigarettes”, “kayakers” are i.e. our model generalizes to unseen words even if they haven’t been explicitly seen before. This generalization can be attributed to pre-trained GloVe [33] embedding. On Flickr-Split-1 the model predicts a good bounding box even though referred objects lies in a different category. However, when there are too many objects in the image the model gets confused (last column).
+The third row shows predictions on VG-Split-2 (ﬁrst, second column) and VG-Split-3 (third, fourth column). Additionally, we italicize the query word Q which refers to the object A in the image and mention the closest object encountered during training in parenthesis. In VG-Split-2 our model effectively utilizes word embedding knowledge and performs best when the closest object seen during training is visually similar to the referred object. In VG-Split-3 our model additionally needs to disambiguate between a seen object and the referred object and performs well when they are visually distinct like “shorts” and “person”. However, when the two are visually similar as in the case of “planter” and “plants” our model incorrectly grounds the seen object.
+
+5. Conclusion
+In this work, we introduce the task of Zero-Shot grounding (ZSG) which aims at localizing novel objects from a query phrase. We outline four cases of zero-shot grounding to perform ﬁner analysis. We address the limitations posed by previous systems and propose a simple yet effective architecture ZSGNet. Finally, we create new datasets by sub-sampling existing datasets to evaluate each of the four grounding cases. We verify that our proposed model ZSGNet performs signiﬁcantly better than existing baseline in the zero-shot setting.
+Acknowledgment: We thank Jiyang Gao for helpful discussions and the anonymous reviewers for helpful suggestions. This paper is based , in part, on research sponsored by the Air Force Research Laboratory and the Defense Advanced Research Projects Agency under agreement number FA8750-16-2-0204. The U.S. Government is authorized to reproduce and distribute reprints for Governmental purposes notwithstanding any copyright notation thereon. The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily representing the ofﬁcial policies or endorsements, either expressed or implied, of the Air Force Research Laboratory and the Defense Advanced Research Projects Agency or the U.S. Government.
+
+References
+[1] Stanislaw Antol, Aishwarya Agrawal, Jiasen Lu, Margaret Mitchell, Dhruv Batra, C Lawrence Zitnick, and Devi Parikh. Vqa: Visual question answering. In ICCV, 2015. 1
+[2] Ankan Bansal, Karan Sikka, Gaurav Sharma, Rama Chellappa, and Ajay Divakaran. Zero-shot object detection. ECCV, 2018. 2
+[3] Hedi Ben-Younes, Re´mi Cadene, Matthieu Cord, and Nicolas Thome. Mutan: Multimodal tucker fusion for visual question answering. In ICCV, 2017. 2
+[4] Hedi Ben-younes, Re´mi Cadene, Nicolas Thome, and Matthieu Cord. Block: Bilinear superdiagonal fusion for visual question answering and visual relationship detection. AAAI, 2019. 2
+[5] Kan Chen, Trung Bui, Chen Fang, Zhaowen Wang, and Ram Nevatia. AMC: Attention guided multi-modal correlation learning for image search. CVPR, 2017. 1
+[6] Kan Chen, Jiyang Gao, and Ram Nevatia. Knowledge aided consistency for weakly supervised phrase grounding. In CVPR, 2018. 2
+[7] Kan Chen, Rama Kovvuri, and Ram Nevatia. Query-guided regression network with context policy for phrase grounding. In ICCV, 2017. 1, 2, 3, 5, 6, 13
+[8] Harm De Vries, Florian Strub, Sarath Chandar, Olivier Pietquin, Hugo Larochelle, and Aaron Courville. Guesswhat?! visual object discovery through multi-modal dialogue. In CVPR, 2017. 2
+[9] Chaorui Deng, Qi Wu, Qingyao Wu, Fuyuan Hu, Fan Lyu, and Mingkui Tan. Visual grounding via accumulated attention. In CVPR, 2018. 1, 2, 3
+[10] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-scale hierarchical image database. In CVPR, 2009. 6
+[11] Hugo Jair Escalante, Carlos A Herna´ndez, Jesus A Gonzalez, Aurelio Lo´pez-Lo´pez, Manuel Montes, Eduardo F Morales, L Enrique Sucar, Luis Villasen˜or, and Michael Grubinger. The segmented and annotated iapr tc-12 benchmark. CVIU, 2010. 5
+[12] Mark Everingham, Luc Van Gool, Christopher KI Williams, John Winn, and Andrew Zisserman. The pascal visual object classes (voc) challenge. IJCV, 2010. 6, 13
+[13] Akira Fukui, Dong Huk Park, Daylen Yang, Anna Rohrbach, Trevor Darrell, and Marcus Rohrbach. Multimodal compact bilinear pooling for visual question answering and visual grounding. EMNLP, 2016. 2, 6
+[14] Sergio Guadarrama, Erik Rodner, Kate Saenko, Ning Zhang, Ryan Farrell, Jeff Donahue, and Trevor Darrell. Openvocabulary object retrieval. In Robotics: science and systems. Citeseer, 2014. 2
+[15] Kaiming He, Georgia Gkioxari, Piotr Dolla´r, and Ross Girshick. Mask R-CNN. In ICCV, 2017. 2
+[16] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In CVPR, 2016. 4, 6
+[17] Sepp Hochreiter and Ju¨rgen Schmidhuber. Long short-term memory. Neural computation, 1997. 4
+
+[18] Matthew Honnibal and Ines Montani. spacy 2: Natural language understanding with bloom embeddings, convolutional neural networks and incremental parsing. In CNNIP, 2017. 11, 12
+[19] Ronghang Hu, Huazhe Xu, Marcus Rohrbach, Jiashi Feng, Kate Saenko, and Trevor Darrell. Natural language object retrieval. In CVPR, 2016. 1, 2, 5, 6
+[20] Sahar Kazemzadeh, Vicente Ordonez, Mark Matten, and Tamara L. Berg. Referit game: Referring to objects in photographs of natural scenes. In EMNLP, 2014. 2, 3, 5, 6, 7, 13
+[21] Jin-Hwa Kim, Kyoung-Woon On, Woosang Lim, Jeonghee Kim, Jung-Woo Ha, and Byoung-Tak Zhang. Hadamard product for low-rank bilinear pooling. ICLR, 2017. 2
+[22] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. ICLR, 2015. 6
+[23] Ranjay Krishna, Yuke Zhu, Oliver Groth, Justin Johnson, Kenji Hata, Joshua Kravitz, Stephanie Chen, Yannis Kalantidis, Li-Jia Li, David A Shamma, et al. Visual genome: Connecting language and vision using crowdsourced dense image annotations. IJCV, 2017. 2, 5, 11, 13
+[24] Jianan Li, Yunchao Wei, Xiaodan Liang, Fang Zhao, Jianshu Li, Tingfa Xu, and Jiashi Feng. Deep attribute-preserving metric learning for natural language object retrieval. In ACM Multimedia, 2017. 6
+[25] Yikang Li, Wanli Ouyang, Bolei Zhou, Kun Wang, and Xiaogang Wang. Scene graph generation from objects, phrases and region captions. In ICCV, 2017. 2
+[26] Tsung-Yi Lin, Piotr Dolla´r, Ross B Girshick, Kaiming He, Bharath Hariharan, and Serge J Belongie. Feature pyramid networks for object detection. In CVPR, 2017. 2, 4
+[27] Tsung-Yi Lin, Priyal Goyal, Ross Girshick, Kaiming He, and Piotr Dolla´r. Focal loss for dense object detection. TPAMI, 2018. 2, 3, 4, 6, 7
+[28] Tsung-Yu Lin, Aruni RoyChowdhury, and Subhransu Maji. Bilinear cnn models for ﬁne-grained visual recognition. In ICCV, 2015. 2
+[29] Wei Liu, Dragomir Anguelov, Dumitru Erhan, Christian Szegedy, Scott Reed, Cheng-Yang Fu, and Alexander C Berg. SSD: Single shot multibox detector. In ECCV, 2016. 2, 3, 6
+[30] Jiasen Lu, Jianwei Yang, Dhruv Batra, and Devi Parikh. Neural baby talk. In CVPR, 2018. 2
+[31] Junhua Mao, Jonathan Huang, Alexander Toshev, Oana Camburu, Alan L Yuille, and Kevin Murphy. Generation and comprehension of unambiguous object descriptions. In CVPR, 2016. 2
+[32] George A Miller. Wordnet: a lexical database for english. Communications of the ACM, 1995. 5
+[33] Jeffrey Pennington, Richard Socher, and Christopher Manning. Glove: Global vectors for word representation. In EMNLP, 2014. 4, 5, 7, 8, 12
+[34] Bryan A Plummer, Paige Kordas, M Hadi Kiapour, Shuai Zheng, Robinson Piramuthu, and Svetlana Lazebnik. Conditional image-text embedding networks. In ECCV, 2018. 1, 2, 3, 6
+
+[35] Bryan A Plummer, Liwei Wang, Chris M Cervantes, Juan C Caicedo, Julia Hockenmaier, and Svetlana Lazebnik. Flickr30k entities: Collecting region-to-phrase correspondences for richer image-to-sentence models. In ICCV, 2015. 2, 5, 6, 11
+[36] Joseph Redmon, Santosh Divvala, Ross Girshick, and Ali Farhadi. You only look once: Uniﬁed, real-time object detection. In CVPR, 2016. 2
+[37] Joseph Redmon and Ali Farhadi. Yolo9000: better, faster, stronger. CVPR, 2017. 2
+[38] Joseph Redmon and Ali Farhadi. Yolov3: An incremental improvement. arXiv preprint arXiv:1804.02767, 2018. 2
+[39] Shaoqing Ren, Kaiming He, Ross Girshick, and Jian Sun. Faster r-cnn: Towards real-time object detection with region proposal networks. In NIPS, 2015. 2, 4, 6, 13
+[40] Anna Rohrbach, Marcus Rohrbach, Ronghang Hu, Trevor Darrell, and Bernt Schiele. Grounding of textual phrases in images by reconstruction. In ECCV, 2016. 1, 2, 5, 6
+[41] Olga Russakovsky, Jia Deng, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein, et al. Imagenet large scale visual recognition challenge. IJCV, 2015. 6
+[42] Mike Schuster and Kuldip K Paliwal. Bidirectional recurrent neural networks. IEEE TSP, 1997. 4
+[43] Jianwei Yang, Jiasen Lu, Stefan Lee, Dhruv Batra, and Devi Parikh. Graph r-cnn for scene graph generation. In ECCV, 2018. 2
+[44] Peter Young, Alice Lai, Micah Hodosh, and Julia Hockenmaier. From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions. TACL, 2014. 2, 13
+[45] Licheng Yu, Zhe Lin, Xiaohui Shen, Jimei Yang, Xin Lu, Mohit Bansal, and Tamara L Berg. Mattnet: Modular attention network for referring expression comprehension. In CVPR, 2018. 1, 2, 3
+[46] Licheng Yu, Patrick Poirson, Shan Yang, Alexander C Berg, and Tamara L Berg. Modeling context in referring expressions. In ECCV, 2016. 2
+[47] Zhou Yu, Jun Yu, Jianping Fan, and Dacheng Tao. Multimodal factorized bilinear pooling with co-attention learning for visual question answering. In ICCV, 2017. 2
+[48] Zhou Yu, Jun Yu, Chenchao Xiang, Jianping Fan, and Dacheng Tao. Beyond bilinear: generalized multimodal factorized high-order pooling for visual question answering. IEEE TNNLS, 2018. 2
+[49] Zhou Yu, Jun Yu, Chenchao Xiang, Zhou Zhao, Qi Tian, and Dacheng Tao. Rethinking diversiﬁed and discriminative proposal generation for visual grounding. IJCAI, 2018. 1, 2, 3
+[50] Hanwang Zhang, Yulei Niu, and Shih-Fu Chang. Grounding referring expressions in images by variational context. In CVPR, 2018. 2
+[51] Yundong Zhang, Juan Carlos Niebles, and Alvaro Soto. Interpretable visual question answering by visual grounding from attention supervision mining. WACV, 2019. 1
+[52] Bohan Zhuang, Qi Wu, Chunhua Shen, Ian Reid, and Anton van den Hengel. Parallel attention: A uniﬁed framework
+
+for visual object discovery through dialogs and queries. In CVPR, 2018. 2
+
+Appendix
+In this supplementary document, we present some of the details which couldn’t be ﬁt in the main paper. We provide details on how the datasets are sampled (Section A) from Flickr30k Entities [35], Visual Genome [23] and their distributions (Section B). We also provide (i) proposal recall of baseline method (Section C) (ii) image blind and language blind ablation of our model (Section D).
+A. Dataset Construction
+We re-use the notation introduced in Table 1 of the main paper. We use Flickr30k for Case 0, 1 and Visual Genome for Case 2, 3 (reasons detailed in A.4).
+A.1. Case 0: Q ∈/ W
+This is sampled from Flickr30k Entities [35]. In Flickr30k Entities each image has 5 associated sentences. The noun phrases (query-phrases) in each sentence are annotated with the bounding box information. Note that query-phrases in different sentences could refer to the same bounding box. Finally, each bounding box has an associated “entity” which we exploit in Case1. For Case0, we consider the last word in the query phrase and use the lemmatized representation obtained from spacy [18]. This means that words like “car” and “cars” would be considered the same. However, this doesn’t consider synonyms so “automobile” and “cars” are considered different. We sort the lemmatized words in descending order of frequency and consider the topI = 1000 words to be always seen. This is reasonable for words like “woman”, “sky” etc. Of the remaining words we do a 70:30 split and consider the ﬁrst part to be in the include (seen) list (S) and the rest to be in the exclude (unseen) list (U ). Note that even though S, U are disjoint they could share few similar words. The resulting include list contains 7k words and the exclude list contains 3k words. For the test set we use only those images whose annotations have query word Q ∈ U . For the training set we consider the remaining image and remove annotations which have query word Q ∈ U . We also ensure that there is no overlap between the train and test images. The resulting split is called Flickr-Split-0. The main motivation behind Case0 Novel Words (NW) is to see how well our model can perform without explicitly having seen the word during training.
+A.2. Case 1: A ∈/ C
+This is also sampled from Flickr30k Entities [35]. We use the entity information of each noun phrase (queryphrase) provided in the dataset. The entities provided are “people”, “clothing”, “bodyparts”, “animals”, “vehicles”,
+
+“instruments”, “scene” and “other”. “Other” is used to denote those phrases which cannot be categorized into one of the remaining entities.
+We extract out all the images with at least one phrase belonging to the “other” category. Of these, we randomly sample 50% and use them for testing. Of the remaining images, we remove the annotations with the “other” category and use them for training.
+The main motivation behind Case1 is to see how well the model generalizes to novel object categories.
+A.3. Case 2, 3: ∃B objects semantically close to A
+The two cases share the same training images but different test images. We sample the images and queries from the Visual Genome dataset [23]. The dataset creation process has three major components: (i) cleaning the annotations to make them consistent (ii) clustering the objects and creating the train/test splits to satisfy the dataset properties of Case 2, 3 (iii) balancing the resulting splits. Cleaning Visual Genome Annotations: In visual genome each image has an average of 200 phrases. A phrase refers to a single object but may contain multiple objects in it. Consider the phrase“man holding a pizza”; it is not directly speciﬁed if the referred object is a “man” or a “pizza” but there will be a bounding box in the image corresponding to the referred object, let us call it phrase BB; we need to infer the synset for this phrase BB. In addition, for each image, there are also annotated bounding boxes for each object type that appears in any of the phrases; in our example, there would be annotations for “man”, “pizza” and other objects that may appear in other phrases. To identify the synset for a phrase BB, we ﬁnd the object bounding box that it has the maximum IoU with and use the object label associated with that bounding box.
+Another difﬁculty is that if the same object instance is referred to in different phrases, it will have a different phrase BB associated with it. For consistency, we choose one and apply to all phrases. In implementation, we apply a nonmaxima suppression algorithm; even though, there are no scores associated with the boxes, the algorithm selects on among highly overlapping alternatives. This step provides us with a consistent set of annotations.
+Even though the resulting annotations are consistent, the annotations are still spatially imprecise. Due to this reason, we recommend measuring detection accuracy with with IoU threshold of 0.3 instead of the more common value of 0.5.
+Clustering Objects: Once we have a clean and consistent set of annotations, we sort all the objects (nearly 5k objects) by the number of appearances in the image. However, the objects at the tail end of the distribution are very infrequent so we consider only the top 1k objects. Few of these don’t have a corresponding word embedding (not available
+
+(a) Case0 Training Set
+
+(b) Case0 Validation Set
+
+(c) Case0 Test Set
+
+(d) Case2,3 Unbalanced Training Set (e) Case2 Unbalanced Test Set
+
+(f) Case3 Unbalanced Test Set
+
+(g) Case2,3 Balanced Training Set
+
+(h) Case2 Balanced Test Set
+
+(i) Case3 Balanced Test Set
+
+Figure 5. Category-wise distribution of various unseen splits. First row: training, validation and test set splits for Case 0; second row: unbalanced training and test sets for Case2 and Case 3; third row: balanced training and test sets for Case 2 and Case 3. In a row, the colors represent the same entities or the same clusters.
+
+in spacy [18]) so we discard them. This results in a total of 902 objects.
+Next, we cluster the GloVe [33] word embeddings of the objects using K-Means clustering (with K = 20). We sort the objects in each cluster in descending order with respect to their frequency. For a particular cluster k, we consider the ﬁrst half to be “seen” (Sk) and the other half to be “unseen” (Uk). This gives us a total of 445 seen objects and
+
+457 unseen objects. For a given cluster k we consider all the images which have at least one object oi ∈ Uk to be test images. If there is another object in the same image oj such that oj ∈ Sk, we put this image query pair into Case3 else into Case2.
+For the remaining images, we remove annotations for any object oi ∈ ∪kUk and ensure there is at-least one object oi ∈ ∪kSk and use these to form the training set. However,
+
+FR (no f/t) FR (f/t)
+
+Flickr30k
+73.4 90.85
+
+ReferIt
+25.4 58.35
+
+Flickr case0 64.95 85.18
+
+Flickr case1 62.9 74.85
+
+VG 2B 15.87 26.17
+
+VG 3B 13.92 25.07
+
+Table 7. Proposal Recall Rates using top-300 proposals at IoU = 0.5 (0.3 for VG) calculated on test sets. FR: FasterRCNN, no f/t: pretrained on pascal voc, f/t: ﬁne-tuned on the target set. For referit we use f/t model on Flickr30k to be consistent with QRC.
+
+by construction the training set turns out to be imbalanced with respect to clusters.
+Balancing the Dataset To address the above issue we use the following balancing strategy: We use Zipf’s law approximation that f req × rank ≈ C. That is as the rank of the cluster increases the number of annotations for that cluster decreases in a hyperbolic way. We use this to calculate an approximate mean of the clusters. Finally, we also consider 2 × min cluster f req and take the max of the two. Thus, we have an approximate threshold at which we would like to sample. If for a particular cluster this threshold is more than the number of annotations in that cluster, we leave that cluster as it is, else we randomly sample n = threshold annotations. Note that balancing is only done with respect to the clusters and not with respect to the object names. Using this balancing strategy we get a balanced train set. We use 25% of it for validation. For test sets we keep both balanced and unbalanced sets.
+The main motivation for Case2, 3 is to see how well the model generalizes to novel objects even if it depends on the semantic distance of the “seen” objects and if it can disambiguate the novel objects from the “seen” objects.
+A.4. Choice of Datasets
+We note that Flickr30k Entities doesn’t provide synset information which is important to disambiguate synonym cases hence it cannot be used for Case2, 3. Visual Genome doesn’t contain wide categories like “vehicles” hence it cannot be used for Case 1. For Case0, we could use Visual Genome as well, however, we choose Flickr30k Entities due to its precise bounding boxes.
+B. Dataset Distributions
+We provide statistics for each dataset in Fig 5. For Case0 we show the entity-wise distribution (a),(b),(c). In particular we note that the “other” category occupies a larger set in the validation and test sets. This is because the “other” category has a more diverse vocabulary and encompasses a larger part of the exclude vocabulary list. For Case1, since it only has “other” category in its validation and test set, the entity-wise distributions are not meaningful and we don’t include them here.
+For Case2,3 we show the distributions with respect to
+
+Model
+LB IB
+
+Flickr30k
+0.008 28.07
+
+ReferIt
+0.0042 24.75
+
+Flickr case0 0.009 24.42
+
+Flickr case1 0.0024 17.15
+
+VG 2B 0.0084 9.5
+
+VG 3B 0.0093 9.27
+
+Table 8. Ablation study: Language Blind (LB) and Image Blind (IB) setting using Images of Resolution 300 × 300. Metric reported is Accuracy@IoU=0.5 (0.3 for VG)
+
+the clusters formed via K-Means for both the unbalanced [(d),(e),(f)] and balanced cases [(g), (h), (i)]. We don’t train on the unbalanced set but do test on the unbalanced set as well. Note that the distribution across clusters in the balanced sets are uniform which means our balancing strategy was successful.
+C. Proposals from Pre-Trained Detector(s)
+A crucial difference between ZSGNet and prior work is the removal of proposals obtained from a pre-trained network. To explicitly analyze the the errors caused due to missing proposals we calculate the proposal recall.
+Proposal Recall: We measure the recall rates (@300) of the region proposal network (RPN) from FasterRCNN [39] pretrained on Pascal VOC [12] and ﬁne-tuned on the target dataset in Table 7. For ReferIt [20] we use the ﬁne-tuned model on Flickr30k Entities [44] to be consistent with QRC [7]. We note that (i) proposal recall signiﬁcantly improves when we ﬁne-tune on the target dataset (ii) performance of QRG on Flickr30k, case0, case1 follows the same trend as the proposal recall (iii) proposal recall is signiﬁcantly smaller on Visual Genome [23] due to (a) a large number of classes in visual genome (b) considering the “unseen” classes during training as negatives. These recall scores motivate the use of dense proposals for zero-shot grounding.
+D. Image Blind and Language Blind Ablations
+Model Ablations: We ablate our model in two settings: language blind (LB) (the model sees only the image and not the query) and image blind (IB) (the model considers the query but not the image). We provide the results obtained after retraining the model in Table 8. In the LB case, our model sees multiple correct solutions for the same image and therefore gives a random box output leading to a very low accuracy across all datasets. In the IB case, our model learns to always predict a box in the center. We note that the referred object lies in the center of the image for Flickr30k and ReferIt. This is because Flickr30k Entities contains queries derived from captions which refer to the central part of the image and ReferIt is a two player game with a high chance of referring to the central object, leading to relatively high accuracy 25 − 30%.
+However, this is substantially lower for Visual Genome (9 − 10%) which has denser object annotations.
+

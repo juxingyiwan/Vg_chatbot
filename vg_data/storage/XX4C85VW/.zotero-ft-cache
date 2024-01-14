@@ -1,0 +1,433 @@
+Skip to search form Skip to main content Skip to account menu
+Semantic Scholar Semantic Scholar's Logo
+Search
+Andy
+
+    DOI: 10.1093/NSR/NWX106
+    Corpus ID: 44192968
+
+A brief introduction to weakly supervised learning
+
+ @article{Zhou2018ABI,
+  title={A brief introduction to weakly supervised learning},
+  author={Zhi-Hua Zhou},
+  journal={National Science Review},
+  year={2018},
+  volume={5},
+  pages={44-53},
+  url={https://api.semanticscholar.org/CorpusID:44192968}
+}
+
+    Zhi-Hua Zhou
+    Published 2018
+    Computer Science
+    National Science Review 
+
+TLDR
+This article reviews some research progress of weakly supervised learning, focusing on three typical types of weak supervision: incomplete supervision, where only a subset of training data is given with labels; inexact supervision, Where the training data are given with only coarse-grained labels; and inaccurate supervision,Where the given labels are not always ground-truth. Expand
+View via Publisher
+academic.oup.com
+Save to Library Save
+Create Alert Alert
+Cite
+easyScholar文献管理
+Share
+1,250 Citations
+Highly Influential Citations
+35
+Background Citations
+596
+Methods Citations
+131
+Results Citations
+2
+View All
+
+    Figures
+    Topics
+    1,250 Citations
+    103 References
+    Related Papers 
+
+Figures from this paper
+
+    figure 1
+    figure 1
+    figure 2
+    figure 2
+    figure 3
+    figure 3
+    figure 4
+    figure 4
+    figure 5
+    figure 5
+    figure 6
+    figure 6
+
+View All 6 Figures & Tables
+Topics
+AI-Generated
+Incomplete Supervision (opens in a new tab) Inaccurate Supervision (opens in a new tab) Inexact Supervision (opens in a new tab) Coarse-grained Labels (opens in a new tab) Weakly Supervised Learning (opens in a new tab) Embedded-space Paradigm (opens in a new tab) Drug Activity Prediction (opens in a new tab) Low-density Separation Methods (opens in a new tab) Weak Supervision (opens in a new tab) Supervised Learning (opens in a new tab)
+1,250 Citations
+Date Range
+Citation Type
+Has PDF
+Author
+More Filters
+Safe semi-supervised learning: a brief introduction
+
+    Yu-Feng Li De-Ming Liang
+    Computer Science
+    Frontiers of Computer Science
+    2019 
+
+TLDR
+This article reviews some research progress of safe semi-supervised learning, focusing on three types of safeness issue: data quality, where the training data is risky or of low-quality; model uncertainty,Where the learning algorithm fails to handle the uncertainty during training; measure diversity, whereThe safe performance could be adapted to diverse measures. Expand
+
+    85
+    PDF
+
+    1 Excerpt 
+
+Save
+Towards Safe Weakly Supervised Learning
+
+    Yu-Feng Li Lan-Zhe Guo Zhi-Hua Zhou
+    Computer Science
+    IEEE Transactions on Pattern Analysis and Machine…
+    2021 
+
+TLDR
+A generic ensemble learning scheme to derive a safe prediction by integrating multiple weakly supervised learners is presented, which optimize the worst-case performance gain and lead to a maximin optimization. Expand
+
+    91
+    PDF
+
+    3 Excerpts 
+
+Save
+Moderately Supervised Learning: Definition, Framework and Generality
+
+    Yongquan Yang
+    Computer Science
+    2020 
+
+TLDR
+This article expands the categorization of SL and investigates the sub-type moderately supervised learning (MSL) that concerns the situation where the given labels are ideal, but due to the simplicity in annotation, careful designs are required to transform the given labelled targets into easy-to-learn targets. Expand
+
+    Highly Influenced
+    [PDF] 
+
+    17 Excerpts 
+
+Save
+Weakly Supervised Label Learning Flows
+
+    You Lu Chidubem Arachie Bert Huang
+    Computer Science
+    arXiv.org
+    2023 
+
+TLDR
+This paper develops label learning flows (LLF), a general framework for weakly supervised learning problems, and develops a training method for LLF that trains the conditional flow inversely and avoids estimating the labels. Expand
+
+    Highly Influenced
+    [PDF] 
+
+    3 Excerpts 
+
+Save
+Learning From Incomplete and Inaccurate Supervision
+
+    Zhen-Yu Zhang Peng Zhao Yuan Jiang Zhi-Hua Zhou
+    Computer Science
+    IEEE Transactions on Knowledge and Data…
+    2022 
+
+TLDR
+This paper investigates the problem of learning from incomplete and inaccurate supervision, where only a limited subset of training data is labeled but potentially with noise and proposes novel approaches that effectively alleviate the negative influence of label noise with the help of a vast number of unlabeled data. Expand
+
+    38
+    PDF
+
+    1 Excerpt 
+
+Save
+Learning from Indirect Observations
+
+    Yivan Zhang Nontawat Charoenphakdee Masashi Sugiyama
+    Computer Science
+    arXiv.org
+    2019 
+
+TLDR
+A probabilistic framework, learning from indirect observations, for learning from a wide range of weak supervision in real-world problems, e.g., noisy labels, complementary labels and coarse-grained labels is presented. Expand
+
+    4
+    [PDF] 
+
+    2 Excerpts 
+
+Save
+Semi-Supervised Ensemble Learning for Dealing with Inaccurate and Incomplete Supervision
+
+    Mona Nashaat Aindrila Ghosh James Miller Shaikh Quader
+    Computer Science
+    ACM Transactions on Knowledge Discovery from Data
+    2022 
+
+TLDR
+Smart MEnDR is presented, a Classification Model that applies Ensemble Learning and Data-driven Rectification to deal with inaccurate and incomplete supervised datasets and demonstrates the effectiveness of the proposed framework in detecting noise, providing correct labels, and attaining high classification performance. Expand
+
+    3
+
+Save
+Training image classifiers using Semi-Weak Label Data
+
+    Anxiang Zhang Ankit Shah B. Raj
+    Computer Science
+    arXiv.org
+    2021 
+
+TLDR
+A novel semi-weak label learning paradigm is introduced as a middle ground to mitigate the problem of learning from semi- weak labels and outperforms both baseline models for MIL-based weakly super-vised setting and learning from proportion setting. Expand
+
+    2
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+A Unified Approach to Count-Based Weakly-Supervised Learning
+
+    Vinay Shukla Zhe Zeng Kareem Ahmed Guy Van den Broeck
+    Computer Science
+    arXiv.org
+    2023 
+
+TLDR
+A unified approach to learning from weakly-labeled data with the ability to compute the probability of exactly k out of n outputs being set to true is developed, which is differentiable, exact, and efficient. Expand
+
+    [PDF] 
+
+    1 Excerpt 
+
+Save
+WeakAL: Combining Active Learning and Weak Supervision
+
+    Julius Gonsior Maik Thiele Wolfgang Lehner
+    Computer Science
+    IFIP Working Conference on Database Semantics
+    2020 
+
+TLDR
+This paper proposes WeakAL, which incorporates Weak Supervision (WS) techniques directly into the AL cycle, and investigates different WS strategies as well as different parameter combinations for a wide range of real-world datasets. Expand
+
+    9
+    PDF
+
+    1 Excerpt 
+
+Save
+...
+1
+2
+3
+4
+5
+...
+103 References
+Date Range
+Citation Type
+Has PDF
+Author
+More Filters
+Convex and scalable weakly labeled SVMs
+
+    Yu-Feng Li I. Tsang J. Kwok Zhi-Hua Zhou
+    Computer Science, Mathematics
+    Journal of machine learning research
+    2013 
+
+TLDR
+This paper focuses on SVMs and proposes the WELLSVM via a novel label generation strategy, which leads to a convex relaxation of the original MIP, which is at least as tight as existing convex Semi-Definite Programming (SDP) relaxations. Expand
+
+    92
+    [PDF] 
+
+    2 Excerpts 
+
+Save
+Towards Making Unlabeled Data Never Hurt
+
+    Yu-Feng Li Zhi-Hua Zhou
+    Computer Science
+    IEEE Transactions on Pattern Analysis and Machine…
+    2015 
+
+TLDR
+It is here shown that S4VMs are provably safe and that the performance improvement using unlabeled data can be maximized, whereas in contrast to S3VMs which hurt performance significantly in many cases, S 4VMs rarely perform worse than inductive SVMs. Expand
+
+    321
+    PDF
+
+    1 Excerpt 
+
+Save
+Weak supervision and other non-standard classification problems: A taxonomy
+
+    J. Hernández-González Iñaki Inza J. A. Lozano
+    Computer Science, Mathematics
+    Pattern Recognition Letters
+    2016 
+
+    94
+
+    1 Excerpt 
+
+Save
+Learning From Crowds
+
+    V. Raykar Shipeng Yu +4 authors Linda Moy
+    Computer Science
+    Journal of machine learning research
+    2010 
+
+TLDR
+A probabilistic approach for supervised learning when the authors have multiple annotators providing (possibly noisy) labels but no absolute gold standard, and experimental results indicate that the proposed method is superior to the commonly used majority voting baseline. Expand
+
+    1,357
+    PDF
+
+    1 Excerpt 
+
+Save
+On the relation between multi-instance learning and semi-supervised learning
+
+    Zhi-Hua Zhou Jun-Ming Xu
+    Computer Science, Mathematics
+    International Conference on Machine Learning
+    2007 
+
+TLDR
+The MissSVM algorithm is proposed which addresses multi- instance learning using a special semi-supervised support vector machine and is competitive with state-of-the-art multi-instance learning algorithms. Expand
+
+    171
+    PDF
+
+    1 Excerpt 
+
+Save
+Learning with Local and Global Consistency
+
+    Dengyong Zhou O. Bousquet T. N. Lal J. Weston B. Scholkopf
+    Computer Science, Mathematics
+    Neural Information Processing Systems
+    2003 
+
+TLDR
+A principled approach to semi-supervised learning is to design a classifying function which is sufficiently smooth with respect to the intrinsic structure collectively revealed by known labeled and unlabeled points. Expand
+
+    4,288
+    PDF
+
+    1 Excerpt 
+
+Save
+MISSL: multiple-instance semi-supervised learning
+
+    R. Rahmani S. Goldman
+    Computer Science
+    International Conference on Machine Learning
+    2006 
+
+TLDR
+This work presents MISSL (Multiple-Instance Semi-Supervised Learning) that transforms any MI problem into an input for a graph-based single-instance semi-supervised learning method that encodes the MI aspects of the problem simultaneously working at both the bag and point levels. Expand
+
+    140
+    PDF
+
+    1 Excerpt 
+
+Save
+When semi-supervised learning meets ensemble learning
+
+    Zhi-Hua Zhou
+    Computer Science, Engineering
+    International Workshop on Multiple Classifier…
+    2009 
+
+TLDR
+This paper advocates that semi-supervised learning and ensemble learning are indeed beneficial to each other, and stronger learning machines can be generated by leveraging unlabeled data and classifier combination. Expand
+
+    156
+    PDF
+
+    1 Excerpt 
+
+Save
+Active Learning Literature Survey
+
+    Burr Settles
+    Computer Science
+    2009 
+
+TLDR
+This report provides a general introduction to active learning and a survey of the literature, including a discussion of the scenarios in which queries can be formulated, and an overview of the query strategy frameworks proposed in the literature to date. Expand
+
+    5,639
+    PDF
+
+    2 Excerpts 
+
+Save
+A review of multi-instance learning assumptions
+
+    James R. Foulds E. Frank
+    Computer Science, Mathematics
+    Knowledge engineering review (Print)
+    2010 
+
+TLDR
+This paper aims to clarify the use of alternative MI assumptions by reviewing the work done in this area, and focuses on a relaxed view of the MI problem, where the standard MI assumption is dropped and alternative assumptions are considered instead. Expand
+
+    352
+    PDF
+
+    1 Excerpt 
+
+Save
+...
+1
+2
+3
+4
+5
+...
+Related Papers
+
+Showing 1 through 3 of 0 Related Papers
+
+Stay Connected With Semantic Scholar
+Sign Up
+What Is Semantic Scholar?
+
+Semantic Scholar is a free, AI-powered research tool for scientific literature, based at the Allen Institute for AI.
+Learn More
+About
+About Us Meet the Team Publishers Blog (opens in a new tab) AI2 Careers (opens in a new tab)
+Product
+Product Overview Semantic Reader Scholar's Hub Beta Program Release Notes
+API
+API Overview API Tutorials API Documentation (opens in a new tab) API Gallery
+Research
+Publications Researchers Research Careers Prototypes Resources
+Help
+FAQ Librarians Tutorials Contact
+Proudly built by AI2 (opens in a new tab)
+Collaborators & Attributions • Terms of Service (opens in a new tab) • Privacy Policy (opens in a new tab) • API License Agreement
+The Allen Institute for AI (opens in a new tab)
+.backdrop{height:78px;width:148px}.backdrop__papers{fill:#D9DADB;opacity:0.5}.jewel__backdrop{fill:#1857B6}.jewel__icon{fill:#fff}
+
+请输入需要翻译的文本。
+An Overview of Deep Semi-Supervised Learning

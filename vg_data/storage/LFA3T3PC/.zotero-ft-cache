@@ -1,0 +1,474 @@
+Improved Baselines with Visual Instruction Tuning
+
+Haotian Liu1 Chunyuan Li2 Yuheng Li1 Yong Jae Lee1 1University of Wisconsin–Madison 2Microsoft Research, Redmond
+https://llava-vl.github.io
+
+arXiv:2310.03744v1 [cs.CV] 5 Oct 2023
+
+Abstract
+Large multimodal models (LMM) have recently shown encouraging progress with visual instruction tuning. In this note, we show that the fully-connected vision-language cross-modal connector in LLaVA is surprisingly powerful and data-efficient. With simple modifications to LLaVA, namely, using CLIP-ViT-L-336px with an MLP projection and adding academic-task-oriented VQA data with simple response formatting prompts, we establish stronger baselines that achieve state-of-the-art across 11 benchmarks. Our final 13B checkpoint uses merely 1.2M publicly available data, and finishes full training in ∼1 day on a single 8-A100 node. We hope this can make state-of-the-art LMM research more accessible. Code and model will be publicly available.
+1. Introduction
+Large multimodal models (LMMs) have become increasingly popular in the research community, as they are the key building blocks towards general-purpose assistants [1, 22, 35]. Recent studies on LMMs are converging on a central concept known as visual instruction tuning [28]. The results are promising, e.g. LLaVA [28] and MiniGPT-4 [49] demonstrate impressive results on natural instruction-following and visual reasoning capabilities. To better understand the capability of LMMs, multiple benchmarks [11, 20, 26, 29, 43] have been proposed. Recent works further demonstrate improved performance by scaling up the pretraining data [2, 9], instruction-following data [9, 21, 45, 46], visual encoders [2], or langauge models [31], respectively. The LLaVA architecture is also leveraged in different downstream tasks and domains, including region-level [6, 44] and pixel-level [19] understanding, biomedical assistants [23], image generation [3], adversarial studies [4, 47].
+This note establishes stronger and more feasible baselines built upon the LLaVA framework. We report that two simple improvements, namely, an MLP cross-modal connector and incorporating academic task related data such as VQA, are orthogonal to the framework of LLaVA, and when used with
+
+VQAv2
+
+MM-Vet
+
+80.0
+
+GQA
+
+LLaVA-Bench 70.7
+
+78.2
+
+63.3
+
+35.4
+
+57.5
+
+VizWiz
+
+53.6
+
+25.6
+
+49.533.438.9
+
+SEED-Benc6h1.6 58.2 53.4
+
+63.1 68.2 71.6 SQA-IMG
+
+MMBench-C6N3.656.7
+
+60.6 67.7
+
+MMBench
+
+1293.878.9 50.7 61.35
+
+1487.5 1531.3 MME
+
+8855.3.9 POPE
+
+TextVQA BLIP-2 InstructBLIP Qwen-VL-Chat LLaVA-1.5
+
+Pre-training Instruction Tuning LL-a1V.A5 00..5667
+
+language model (Vicuna v1.5 13B)
+
+Qwe-Cnh-VaLt
+
+145000
+
+InstBruLcIPt 1.1229 101 103
+# Training Samples (M)
+
+vision-language connector (MLP) vision encoder (CLIP ViT-L/336px)
+
+tokenizer & embedding
+User: what is unusual about this image?
+
+Figure 1. LLaVA-1.5 achieves SoTA on a broad range of 11 tasks (Top), with high training sample efficiency (Left) and simple modifications to LLaVA (Right): an MLP connector and including academic-task-oriented data with response formatting prompts.
+
+LLaVA, lead to better multimodal understanding capabilities. In contrast to InstructBLIP [9] or Qwen-VL [2], which trains specially designed visual resamplers on hundreds of millions or even billions of image-text paired data, LLaVA uses the simplest architecture design for LMMs and requires only training a simple fully-connected projection layer on merely 600K image-text pairs. Our final model can finish training in ∼1 day on a single 8-A100 machine and achieves stateof-the-art results on a wide range of benchmarks. Moreover, unlike Qwen-VL [2] that includes in-house data in training, LLaVA utilizes only publicly available data. We hope these improved and easily-reproducible baselines will provide a reference for future research in open-source LMM.
+
+1
+
+2. Background
+Instruction-following LMM. Common architectures include a pre-trained visual backbone to encode visual features, a pre-trained large language model (LLM) to comprehend the user instructions and produce responses, and a vision-language cross-modal connector to align the vision encoder outputs to the language models. As shown in Fig. 1, LLaVA [28] is perhaps the simplest architecture for LMMs. Optionally, visual resamplers (e.g. Qformer [24]) are used to reduce the number of visual patches [2, 9, 49]. Training an instruction-following LMM usually follows a two-stage protocol. First, the vision-language alignment pretraining stage leverages image-text pairs to align the visual features with the language model’s word embedding space. Earlier works utilize relatively few image-text pairs (e.g. ∼600K [28] or ∼6M [49]), while some recent works pretrain the visionlanguage connector for a specific language model on a large amount of image-text pairs (e.g. 129M [9] and 1.4B [2]), to maximize the LMM’s performance. Second, the visual instruction tuning stage tunes the model on visual instructions, to enable the model to follow users’ diverse requests on instructions that involve the visual contents.
+Multimodal instruction-following data. In NLP, studies show that the quality of instruction-following data largely affects the capability of the resulting instruction-following models [48]. For visual instruction tuning, LLaVA [28] is the pioneer to leverage text-only GPT-4 to expand the existing COCO [27] bounding box and caption dataset to a multimodal instruction-following dataset that contains three types of instruction-following data: conversational-style QA, detailed description, and complex reasoning. LLaVA’s pipeline has been employed to expand to textual understanding [45], million-scales [46], and region-level conversations [6]. InstructBLIP [9] incorporates academic-task-oriented VQA datasets to further enhance the model’s visual capabilities. Conversely, [5] identifies that such naive data merging can result in the models that tend to overfit to VQA datasets and thus are inability to participate in natural conversations. The authors further proposes to leverage the LLaVA pipeline to convert VQA datasets to a conversational style. While this proves effective for training, it introduces added complexities in data scaling.
+3. Improved Baselines of LLaVA
+Overview. As the initial work of visual instruction tuning, LLaVA has showcased commendable proficiency in visual reasoning capabilities, surpassing even more recent models on diverse benchmarks for real-life visual instructionfollowing tasks, while only falling short on academic benchmarks that typically require short-form answers (e.g. singleword). The latter was attributed to the fact that LLaVA has
+
+Method
+
+LLM Res. GQA MME MM-Vet
+
+InstructBLIP
+
+14B 224 49.5 1212.8 25.6
+
+Only using a subset of InstructBLIP training data
+
+0 LLaVA
+
+7B 224 – 502.8 23.8
+
+1 +VQA-v2
+
+7B 224 47.0 1197.0 27.7
+
+2 +Format prompt
+
+7B 224 46.8 1323.8 26.3
+
+3 +MLP VL connector 7B 224 47.3 1355.2 27.8
+
+4 +OKVQA/OCR
+
+7B 224 50.0 1377.6 29.6
+
+Additional scaling
+
+5 +Region-level VQA 7B 224 50.3 1426.5 30.8
+
+6 +Scale up resolution 7B 336 51.4 1450 30.3
+
+7 +GQA
+
+7B 336 62.0∗ 1469.2 30.7
+
+8 +ShareGPT
+
+7B 336 62.0∗ 1510.7 30.5
+
+9 +Scale up LLM
+
+13B 336 63.3∗ 1531.3 36.3
+
+Table 1. Scaling results on ■ data, ■ model, and ■ resolution. We choose to conduct experiments on GQA [14], MME [11], and MM-Vet [43] to examine the representative capabilities of VQA with short answers, VQA with output formatting, and natural visual conversations, respectively. ∗Training images of GQA were observed during training.
+
+not been pretrained on large-scale data, as other approaches do. In this note, we first study the scaling effect of data, models and input image resolution on a selection of three datasets in Table 1, and then compare the final model against existing LMMs on a diverse set of 12 benchmarks in Table 2. We show that the LLaVA’s architecture is powerful and dataefficient for visual instruction tuning, and achieves the best performance using significantly less compute and training data than all other methods.
+Response formatting prompts. We find that the inability [5] to balance between short- and long-form VQA for approaches like InstructBLIP [9] is mainly due to the following reasons. First, ambiguous prompts on the response format. For example, Q: {Question} A: {Answer}. Such prompts do not clearly indicate the desirable output format, and can overfit an LLM behavorially to short-form answers even for natural visual conversations. Second, not finetuning the LLM. The first issue is worsened by InstructBLIP only finetuning the Qformer for instruction-tuning. It requires the Qformer’s visual output tokens to control the length of the LLM’s output to be either long-form or short-form, as in prefix tuning [25], but Qformer may lack the capability of properly doing so, due to its limited capacity compared with LLMs like LLaMA. See Table 6 for a qualitative example.
+To address this, we propose to use a single response formatting prompt that clearly indicates the output format, to be appended at the end of VQA questions when promoting short answers: Answer the question using a single word or phrase. We empirically show that when LLM is finetuned with such prompts, LLaVA is able to properly adjust the output format according to the user’s instructions, and does not require additional processing of the VQA data us-
+
+2
+
+Method
+BLIP-2 InstructBLIP InstructBLIP Shikra IDEFICS-9B IDEFICS-80B Qwen-VL Qwen-VL-Chat
+LLaVA-1.5 LLaVA-1.5
+
+LLM
+Vicuna-13B Vicuna-7B Vicuna-13B Vicuna-13B LLaMA-7B LLaMA-65B Qwen-7B Qwen-7B
+Vicuna-7B Vicuna-13B
+
+Res. PT IT VQAv2 GQA
+
+224 129M -
+
+41.0 41
+
+224 129M 1.2M –
+
+49.2
+
+224 129M 1.2M –
+
+49.5
+
+224 600K 5.5M 77.4∗ –
+
+224 353M 1M 50.9 38.4
+
+224 353M 1M 60.0 45.2 448 1.4B† 50M† 78.8∗ 59.3∗ 448 1.4B† 50M† 78.2∗ 57.5∗
+
+336 558K 665K 78.5∗ 62.0∗ 336 558K 665K 80.0∗ 63.3∗
+
+VisWiz SQAI
+
+19.6 61
+
+34.5 60.5
+
+33.4 63.1
+
+–
+
+–
+
+35.5 –
+
+36.0 –
+
+35.2 67.1
+
+38.9 68.2
+
+50.0 66.8 53.6 71.6
+
+VQAT POPE MME MMB MMBCN SEED LLaVAW MM-Vet
+
+42.5 85.3 1293.8 –
+
+–
+
+46.4 38.1 22.4
+
+50.1 –
+
+–
+
+36 23.7 53.4 60.9 26.2
+
+50.7 78.9 1212.8 –
+
+–
+
+–
+
+58.2 25.6
+
+–
+
+–
+
+–
+
+58.8 –
+
+–
+
+–
+
+–
+
+25.9 –
+
+–
+
+48.2 25.2 –
+
+–
+
+–
+
+30.9 –
+
+–
+
+54.5 38.1 –
+
+–
+
+–
+
+63.8 –
+
+–
+
+38.2 7.4 56.3 –
+
+–
+
+61.5 –
+
+1487.5 60.6 56.7 58.2 –
+
+–
+
+58.2 85.9 1510.7 64.3 58.3 58.6 63.4 30.5 61.3 85.9 1531.3 67.7 63.6 61.6 70.7 35.4
+
+Table 2. Comparison with SoTA methods on 12 benchmarks. LLaVA achieves the best performance on 11/12 benchmarks, and ranks
+the second on the other. Res, PT, IT indicate input image resolution, the number of samples in pretraining and instruction tuning stage, respectively. Benchmark names are abbreviated due to space limits. VQA-v2 [12]; GQA [14]; VisWiz [13]; SQAI: ScienceQA-IMG [30]; VQAT: TextVQA [40]; POPE [26]; MME [11]; MMB: MMBench [29]; MMBCN: MMBench-Chinese [29]; SEED: SEED-Bench [20]; LLaVAW: LLaVA-Bench (In-the-Wild) [28]; MM-Vet [43]. ∗The training images of the datasets are observed during training. †Includes
+in-house data that is not publicly accessible.
+
+ing ChatGPT [5], which further enables scaling to various data sources. As shown in Table 1, by merely including VQAv2 [12] in training, LLaVA’s performance on MME significantly improves (1323.8 vs 502.8) and outperforms InstructBLIP by 111 points.
+MLP vision-language connector. Inspired by the improved performance in self-supervised learning by changing from a linear projection to an MLP [7, 8], we find that improving the vision-language connector’s representation power with a twolayer MLP can improve LLaVA’s multimodal capabilities, compared with the original linear projection design.
+Academic task oriented data. We further include additional academic-task-oriented VQA datasets for VQA, OCR, and region-level perception, to enhance the model’s capabilities in various ways, as shown in Table 1. We first include four additional datasets that are used in InstructBLIP: openknowledge VQA (OKVQA [33], A-OKVQA [37]) and OCR (OCRVQA [34], TextCaps [39]). A-OKVQA is converted to multiple choice questions and a specific response formatting prompt is used: Answer with the option’s letter from the given choices directly. With only a subset of the datasets InstructBLIP uses, LLaVA already surpasses it on all three tasks in Table 1, suggesting LLaVA’s effective design. Furthermore, we find further adding region-level VQA datasets (Visual Genome [18], RefCOCO [17, 32]) improves the model’s capability of localizing fine-grained visual details.
+Additional scaling. We further scale up the input image resolution to allow LLM to clearly “see” the details of images, and add the GQA dataset as an additional visual knowledge source. We also incorporate ShareGPT [38] data and scale up the LLM to 13B as in [2, 6, 31]. Results on MM-Vet shows the most significant improvement when scaling the LLM to 13B, suggesting the importance of the base LLM’s capability for visual conversations. We denote the final model with all the modifications as LLaVA-1.5 (the last two rows in
+
+Table 1), which achieves an impressive performance that significantly outperforms the original LLaVA [28].
+4. Discussion
+Comparison with SoTA. We benchmark LLaVA-1.5 on a wide range of academic VQA benchmarks and recent benchmarks specifically proposed for instruction-following LMMs, totalling 12 benchmarks. We show that it achieves the best performance across 11 out of 12 benchmarks, despite using magnitudes smaller pretraining and instruction tuning data compared with other methods [2, 9]. It is encouraging that LLaVA-1.5 achieves the best performance with the simplest architecture, academic compute and public datasets, and yields a fully-reproducible and affordable baseline for future research. The results also suggest that visual instruction tuning plays a more important role in improving an LMM’s capabilities than pretraining, and raises questions upon the common belief that LMMs require significant amount of vision-language alignment pretraining [2, 9, 24], despite that the vision encoders (e.g. CLIP [36], OpenCLIP [16], EVA-CLIP [10], etc.) are already pretrained on web-scale image-text paired dataset. LLaVA-1.5 (even the 7B model) outperforms 80B IDEFICS [15], a Flamingo-like LMM with billions of trainable parameters for cross-modal connection. This also makes us rethink the benefits of the vision samplers and the necessity of the additional large-scale pretraining, in terms of multimodal instruction-following capabilities.
+Zero-shot format instruction generalization. Although LLaVA-1.5 is only trained with a limited number of format instructions, it generalizes to others. First, VizWiz [13] requires the model to output “Unanswerable” when the provided content is insufficient to answer the question, and our response format prompt (Table 8) effectively instructs the model to do so (11.1% → 67.8% on unanswerable questions). We additionally present qualitative examples on instructing
+
+3
+
+Visual input example, Tricky Question:
+
+Visual input example, Constrained JSON Output:
+
+User GPT-4V LLaVA LLaVA-1.5
+
+If there are factual errors in the questions, point it out; if not, proceed answering the question. What’s happening in the desert?
+Sorry, I cannot answer that question as there is no context about which desert you are referring to.
+In the image, there is a city skyline with buildings and a beach with people enjoying the sunset. The scene is set in a desert, which is unusual for a beach setting.
+There are no deserts in the image. The image features a beach with palm trees, a city skyline, and a large body of water.
+
+Table 3. LLaVA-1.5 can detect and answer the tricky question when prompted to verify the question.
+
+LLaVA-1.5 to verify the tricky questions (Fig. 3) and respond in a constrained JSON format (Fig. 4).
+Zero-shot multilingual capability. Though LLaVA-1.5 is not finetuned for multilingual multimodal instruction following at all, we find that it is capable of following multilingual instructions, partly due to the multilingual language instructions in ShareGPT [38]. We quantitatively evaluate the model’s generalization capability to Chinese on MMBenchCN [29], where the questions of MMBench are converted to Chinese. Notably, LLaVA-1.5 outperforms Qwen-VL-Chat by 7.3% (63.6% vs 56.7%), despite Qwen being finetuned on Chinese multimodal instructions while LLaVA-1.5 is not.
+Computational cost. For LLaVA-1.5, we use the same pretraining dataset of LCS-558K1, and keep the training iterations and batch size roughly the same for instruction tuning as LLaVA [28]. Due to the increased image input resolution to 336px, the training of LLaVA-1.5 is ∼2× as long as LLaVA: ∼6 hours of pretraining and ∼20 hours of visual instruction tuning, using 8× A100s.
+Limitations. Despite the promising results demonstrated by LLaVA-1.5, several limitations must be acknowledged. First, LLaVA utilizes full image patches, potentially prolonging each training iteration. While visual resamplers [2, 9, 24] reduce the number of visual patches in LLMs, they currently cannot achieve convergence as efficiently as LLaVA with a comparable amount of training data, probably due to more trainable parameters in the resamplers. The development of a sample-efficient visual resampler could pave the way for fu-
+1LCS-558K: a subset of ∼558K image-text pairs from LAION-CC-SBU with BLIP captions, as used in LLaVA-Lightning series.
+
+User
+GPT-4V LLaVA LLaVA1.5
+
+Please read the text in this image and return the information in the following JSON format (note xxx is placeholder, if the information is not available in the image, put "N/A" instead). {"class": xxx, "DLN": xxx, "DOB": xxx, "Name": xxx, "Address": xxx, "EXP": xxx, "ISS": xxx, "SEX": xxx, "HGT": xxx, "WGT": xxx, "EYES": xxx, "HAIR": xxx, "DONOR": xxx}
+{"class": "C", "DLN": "1234568", "DOB": "08/31/1977", "Name": "Ima Cardholder", "Address": "2570 24th Street, Anytown, CA 95818", "EXP": "08/31/2014", "ISS": "08/31/2011", "SEX": "F", "HGT": "5-05", "WGT": "125 lbs", "EYES": "BRN", "HAIR": "BRN", "DONOR": "VETERAN"}
+{"class": "Driver License", "DLN": "CA123 456 789", "DOB": "01/01/1990", "Name": "Amy", "Address": "Anytown, CA", "EXP": "08/31/2023", "ISS": "Veteran", "SEX": “F", "HGT": "5’5", "WGT": "130", "EYES": "Brown", "HAIR": "Brown", "DONOR": "Unknown"}
+{"class": "C", "DLN": "1132456789", "DOB": "08/23/1971", "Name": "Ima Cardholder", "Address": "Anytown, State, Zip", "EXP": "08/23/2014", "ISS": "California", "SEX": "F", "HGT": "5’5", "WGT": "123", "EYES": "Brown", "HAIR": "Brown", "DONOR": "N/A"}
+
+Table 4. LLaVA-1.5 can extract information from the image and answer following the required format, despite a few errors compared with GPT-4V. GPT-4V results are obtained from [42].
+
+ture scaling-up of instruction-following multimodal models. Second, LLaVA-1.5 is not yet capable of processing multiple images due to the lack of such instruction-following data, and the limit of the context length. Third, although LLaVA1.5 exhibits proficiency in following complex instructions, its problem-solving capabilities can still be limited in certain domains, which could be improved with a more capable language model and with high-quality, targeted visual instruction tuning data. Finally, despite its significantly reduced propensity for hallucination, LLaVA is not exempt from producing hallucinations and occasionally disseminating misinformation, and should be used with caution in critical applications (e.g. medical).
+Acknowledgements. This work was supported in part by NSF CAREER IIS2150012, and Institute of Information & communications Technology Planning & Evaluation(IITP) grants funded by the Korea government(MSIT) (No. 20220-00871, Development of AI Autonomy and Knowledge Enhancement for AI Agent Collaboration) and (No. RS2022-00187238, Development of Large Korean Language Model Technology for Efficient Pre-training).
+
+4
+
+Appendix
+Data. Our final training data mixture contains a variety of datasets: VQA [12, 14, 33, 37], OCR [34, 39], region-level VQA [17, 18, 32], visual conversation [28] and language conversation [38] data. We adopt multiple strategies to reduce training cost and enhance efficiency, detailed as follows: 1. For all VQA datasets, QA pairs from the same training
+image are merged into a single conversation. 2. For ShareGPT [38], we filter out invalid conversations as
+[41]. Unlike Vicuna [41], long conversations that surpass 2048 tokens are truncated rather than splitting to multiple conversations. This results in ∼40K conversations. 3. Each QA pair in A-OKVQA [37] is augmented k times, where k is the number of choices per question, to counterbalance the lack of multiple-choice data. 4. 80K conversations are sampled from OCRVQA [34]. 5. For Visual Genome, we sample 10 annotations for images with additional annotations. 6. For RefCOCO, conversations are dissected into segments, each containing fewer than 10 conversations. 7. We obverse that language conversations are often longer than visual ones. For each batch, we sample conversations only from a single modality, and this speeds up the training by 25%, and does not affect the final outcome. All data splits are concatenated together and sampled with the same probability. We present the response formatting prompts of the final instruction-following data mixtures in Table 7 and the response format prompts used for each evaluation benchmark in Table 8.
+Hyperparameters. LLaVA-1.5 use the same set of hyperparameters as the original LLaVA, except that we halve the learning rate in pretraining due to the usage of the MLP projection layer instead of the original linear projection layer design. We show the training hyperparameters for both first-stage vision-language alignment pretraining and the second-stage visual instruction tuning in Table 5.
+
+Hyperparameter
+batch size lr lr schedule lr warmup ratio weight decay epoch optimizer DeepSpeed stage
+
+Pretrain Finetune
+
+256
+
+128
+
+1e-3
+
+2e-5
+
+cosine decay
+
+0.03
+
+0
+
+1
+
+AdamW
+
+2
+
+3
+
+Table 5. Hyperparameters of LLaVA-1.5 are the same as the original LLaVA, except that we halve the learning rate in pretraining due to the usage of the MLP projection layer.
+
+Visual input example, Different Format Prompts:
+
+Normal prompt Response Ambiguous prompt Response Formatting prompt
+Response
+
+What is the color of the shirt that the man is wearing? The man is wearing a yellow shirt.
+Q: What is the color of the shirt that the man is wearing? A: The man is wearing a yellow shirt.
+What is the color of the shirt that the man is wearing? Answer the question using a single word or phrase. Yellow.
+
+Table 6. Comparison of how different prompt regularizes the output format. The results are obtained zero-shot directly after LLaVA undergoes the first-stage vision-language alignment pretraining, without any visual instruction tuning.
+
+Data
+
+Size
+
+LLaVA [28] 158K ShareGPT [38] 40K
+
+VQAv2 [12] 83K
+
+GQA [14]
+
+72K
+
+OKVQA [33] 9K
+
+OCRVQA [34] 80K
+
+A-
+
+50K
+
+OKVQA [37]
+
+TextCaps [39] 22K
+
+RefCOCO
+
+30K
+
+[17, 32]
+
+VG [18]
+
+86K
+
+Total
+
+665K
+
+Response formatting prompts – – Answer the question using a single word or phrase.
+Answer with the option’s letter from the given choices directly. Provide a one-sentence caption for the provided image. Note: randomly choose between the two formats Provide a short description for this region. Provide the bounding box coordinate of the region this sentence describes.
+
+Table 7. Instruction-following Data Mixture of LLaVA-1.5.
+
+Data
+
+Response formatting prompts
+
+LLaVA-Bench, MM-Vet –
+
+VQAv2, GQA, TextVQA, Answer the question using a single word or
+
+MME, POPE
+
+phrase.
+
+ScienceQA, MMBench, Answer with the option’s letter from the given
+
+SEED-Bench
+
+choices directly.
+
+VizWiz
+
+When the provided information is insufficient, respond with ‘Unanswerable’. Answer the question using a single word or phrase.
+
+Table 8. Response format prompt for evaluation.
+
+5
+
+References
+[1] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katie Millican, Malcolm Reynolds, et al. Flamingo: a visual language model for few-shot learning. arXiv preprint arXiv:2204.14198, 2022. 1
+[2] Jinze Bai, Shuai Bai, Shusheng Yang, Shijie Wang, Sinan Tan, Peng Wang, Junyang Lin, Chang Zhou, and Jingren Zhou. Qwen-vl: A frontier large vision-language model with versatile abilities. arXiv preprint arXiv:2308.12966, 2023. 1, 2, 3, 4
+[3] Kevin Black, Michael Janner, Yilun Du, Ilya Kostrikov, and Sergey Levine. Training diffusion models with reinforcement learning. arXiv preprint arXiv:2305.13301, 2023. 1
+[4] Nicholas Carlini, Milad Nasr, Christopher A Choquette-Choo, Matthew Jagielski, Irena Gao, Anas Awadalla, Pang Wei Koh, Daphne Ippolito, Katherine Lee, Florian Tramer, et al. Are aligned neural networks adversarially aligned? arXiv preprint arXiv:2306.15447, 2023. 1
+[5] Delong Chen, Jianfeng Liu, Wenliang Dai, and Baoyuan Wang. Visual instruction tuning with polite flamingo. arXiv preprint arXiv:2307.01003, 2023. 2, 3
+[6] Keqin Chen, Zhao Zhang, Weili Zeng, Richong Zhang, Feng Zhu, and Rui Zhao. Shikra: Unleashing multimodal llm’s referential dialogue magic. arXiv preprint arXiv:2306.15195, 2023. 1, 2, 3
+[7] Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey Hinton. A simple framework for contrastive learning of visual representations. In ICML, 2020. 3
+[8] Xinlei Chen, Haoqi Fan, Ross Girshick, and Kaiming He. Improved baselines with momentum contrastive learning. arXiv preprint arXiv:2003.04297, 2020. 3
+[9] Wenliang Dai, Junnan Li, Dongxu Li, Anthony Meng Huat Tiong, Junqi Zhao, Weisheng Wang, Boyang Li, Pascale Fung, and Steven Hoi. Instructblip: Towards general-purpose visionlanguage models with instruction tuning. arXiv preprint arXiv:2305.06500, 2023. 1, 2, 3, 4
+[10] Yuxin Fang, Wen Wang, Binhui Xie, Quan Sun, Ledell Wu, Xinggang Wang, Tiejun Huang, Xinlong Wang, and Yue Cao. Eva: Exploring the limits of masked visual representation learning at scale. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages 19358– 19369, 2023. 3
+[11] Chaoyou Fu, Peixian Chen, Yunhang Shen, Yulei Qin, Mengdan Zhang, Xu Lin, Zhenyu Qiu, Wei Lin, Jinrui Yang, Xiawu Zheng, et al. Mme: A comprehensive evaluation benchmark for multimodal large language models. arXiv preprint arXiv:2306.13394, 2023. 1, 2, 3
+[12] Yash Goyal, Tejas Khot, Douglas Summers-Stay, Dhruv Batra, and Devi Parikh. Making the v in vqa matter: Elevating the role of image understanding in visual question answering. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 6904–6913, 2017. 3, 5
+[13] Danna Gurari, Qing Li, Abigale J Stangl, Anhong Guo, Chi Lin, Kristen Grauman, Jiebo Luo, and Jeffrey P Bigham. Vizwiz grand challenge: Answering visual questions from blind people. In Proceedings of the IEEE conference on
+
+computer vision and pattern recognition, pages 3608–3617, 2018. 3 [14] Drew A Hudson and Christopher D Manning. Gqa: A new dataset for real-world visual reasoning and compositional question answering. In CVPR, 2019. 2, 3, 5 [15] IDEFICS. Introducing idefics: An open reproduction of state-of-the-art visual language model. https : / / huggingface.co/blog/idefics, 2023. 3 [16] Gabriel Ilharco, Mitchell Wortsman, Ross Wightman, Cade Gordon, Nicholas Carlini, Rohan Taori, Achal Dave, Vaishaal Shankar, Hongseok Namkoong, John Miller, Hannaneh Hajishirzi, Ali Farhadi, and Ludwig Schmidt. Openclip. 2021. If you use this software, please cite it as below. 3 [17] Sahar Kazemzadeh, Vicente Ordonez, Mark Matten, and Tamara Berg. Referitgame: Referring to objects in photographs of natural scenes. In Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP), pages 787–798, 2014. 3, 5 [18] Ranjay Krishna, Yuke Zhu, Oliver Groth, Justin Johnson, Kenji Hata, Joshua Kravitz, Stephanie Chen, Yannis Kalantidis, Li-Jia Li, David A Shamma, et al. Visual genome: Connecting language and vision using crowdsourced dense image annotations. International journal of computer vision, 123:32–73, 2017. 3, 5 [19] Xin Lai, Zhuotao Tian, Yukang Chen, Yanwei Li, Yuhui Yuan, Shu Liu, and Jiaya Jia. Lisa: Reasoning segmentation via large language model. arXiv preprint arXiv:2308.00692, 2023. 1 [20] Bohao Li, Rui Wang, Guangzhi Wang, Yuying Ge, Yixiao Ge, and Ying Shan. Seed-bench: Benchmarking multimodal llms with generative comprehension. arXiv preprint arXiv:2307.16125, 2023. 1, 3 [21] Bo Li, Yuanhan Zhang, Liangyu Chen, Jinghao Wang, Fanyi Pu, Jingkang Yang, Chunyuan Li, and Ziwei Liu. Mimic-it: Multi-modal in-context instruction tuning. arXiv preprint arXiv:2306.05425, 2023. 1 [22] Chunyuan Li, Zhe Gan, Zhengyuan Yang, Jianwei Yang, Linjie Li, Lijuan Wang, and Jianfeng Gao. Multimodal foundation models: From specialists to general-purpose assistants. arXiv preprint arXiv:2309.10020, 2023. 1 [23] Chunyuan Li, Cliff Wong, Sheng Zhang, Naoto Usuyama, Haotian Liu, Jianwei Yang, Tristan Naumann, Hoifung Poon, and Jianfeng Gao. Llava-med: Training a large language-andvision assistant for biomedicine in one day. arXiv preprint arXiv:2306.00890, 2023. 1 [24] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. Blip2: Bootstrapping language-image pre-training with frozen image encoders and large language models. arXiv preprint arXiv:2301.12597, 2023. 2, 3, 4 [25] Xiang Lisa Li and Percy Liang. Prefix-tuning: Optimizing continuous prompts for generation. arXiv preprint arXiv:2101.00190, 2021. 2 [26] Yifan Li, Yifan Du, Kun Zhou, Jinpeng Wang, Wayne Xin Zhao, and Ji-Rong Wen. Evaluating object hallucination in large vision-language models. arXiv preprint arXiv:2305.10355, 2023. 1, 3 [27] Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C Lawrence
+
+6
+
+Zitnick. Microsoft COCO: Common objects in context. In ECCV, 2014. 2
+[28] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning. In NeurIPS, 2023. 1, 2, 3, 4, 5
+[29] Yuan Liu, Haodong Duan, Yuanhan Zhang, Bo Li, Songyang Zhang, Wangbo Zhao, Yike Yuan, Jiaqi Wang, Conghui He, Ziwei Liu, et al. Mmbench: Is your multi-modal model an all-around player? arXiv preprint arXiv:2307.06281, 2023. 1, 3, 4
+[30] Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in Neural Information Processing Systems, 2022. 3
+[31] Yadong Lu, Chunyuan Li, Haotian Liu, Jianwei Yang, Jianfeng Gao, and Yelong Shen. An empirical study of scaling instruct-tuned large multimodal models. arXiv preprint arXiv:2309.09958, 2023. 1, 3
+[32] Junhua Mao, Jonathan Huang, Alexander Toshev, Oana Camburu, Alan L Yuille, and Kevin Murphy. Generation and comprehension of unambiguous object descriptions. In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 11–20, 2016. 3, 5
+[33] Kenneth Marino, Mohammad Rastegari, Ali Farhadi, and Roozbeh Mottaghi. Ok-vqa: A visual question answering benchmark requiring external knowledge. In Conference on Computer Vision and Pattern Recognition (CVPR), 2019. 3, 5
+[34] Anand Mishra, Shashank Shekhar, Ajeet Kumar Singh, and Anirban Chakraborty. Ocr-vqa: Visual question answering by reading text in images. In 2019 international conference on document analysis and recognition (ICDAR), pages 947–952. IEEE, 2019. 3, 5
+[35] OpenAI. Gpt-4v(ision) system card. https://cdn. openai .com /papers/GPTV_System_Card.pdf, 2023. 1
+[36] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. arXiv preprint arXiv:2103.00020, 2021. 3
+[37] Dustin Schwenk, Apoorv Khandelwal, Christopher Clark, Kenneth Marino, and Roozbeh Mottaghi. A-okvqa: A benchmark for visual question answering using world knowledge. In European Conference on Computer Vision, pages 146–162. Springer, 2022. 3, 5
+[38] ShareGPT. https://sharegpt.com/, 2023. 3, 4, 5
+[39] Oleksii Sidorov, Ronghang Hu, Marcus Rohrbach, and Amanpreet Singh. Textcaps: a dataset for image captioning with reading comprehension. In Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part II 16, pages 742–758. Springer, 2020. 3, 5
+[40] Amanpreet Singh, Vivek Natarajan, Meet Shah, Yu Jiang, Xinlei Chen, Dhruv Batra, Devi Parikh, and Marcus Rohrbach. Towards vqa models that can read. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, pages 8317–8326, 2019. 3
+
+[41] Vicuna. Vicuna: An open-source chatbot impressing gpt-4 with 90%* chatgpt quality. https://vicuna.lmsys. org/, 2023. 5
+[42] Zhengyuan Yang, Linjie Li, Kevin Lin, Jianfeng Wang, Chung-Ching Lin, Zicheng Liu, and Lijuan Wang. The dawn of lmms: Preliminary explorations with gpt-4v (ision). arXiv preprint arXiv:2309.17421, 2023. 4
+[43] Weihao Yu, Zhengyuan Yang, Linjie Li, Jianfeng Wang, Kevin Lin, Zicheng Liu, Xinchao Wang, and Lijuan Wang. Mm-vet: Evaluating large multimodal models for integrated capabilities. arXiv preprint arXiv:2308.02490, 2023. 1, 2, 3
+[44] Shilong Zhang, Peize Sun, Shoufa Chen, Min Xiao, Wenqi Shao, Wenwei Zhang, Kai Chen, and Ping Luo. Gpt4roi: Instruction tuning large language model on region-of-interest. arXiv preprint arXiv:2307.03601, 2023. 1
+[45] Yanzhe Zhang, Ruiyi Zhang, Jiuxiang Gu, Yufan Zhou, Nedim Lipka, Diyi Yang, and Tong Sun. Llavar: Enhanced visual instruction tuning for text-rich image understanding. arXiv preprint arXiv:2306.17107, 2023. 1, 2
+[46] Bo Zhao, Boya Wu, and Tiejun Huang. Svit: Scaling up visual instruction tuning. arXiv preprint arXiv:2307.04087, 2023. 1, 2
+[47] Yunqing Zhao, Tianyu Pang, Chao Du, Xiao Yang, Chongxuan Li, Ngai-Man Cheung, and Min Lin. On evaluating adversarial robustness of large vision-language models. arXiv preprint arXiv:2305.16934, 2023. 1
+[48] Chunting Zhou, Pengfei Liu, Puxin Xu, Srini Iyer, Jiao Sun, Yuning Mao, Xuezhe Ma, Avia Efrat, Ping Yu, Lili Yu, et al. Lima: Less is more for alignment. arXiv preprint arXiv:2305.11206, 2023. 2
+[49] Deyao Zhu, Jun Chen, Xiaoqian Shen, Xiang Li, and Mohamed Elhoseiny. Minigpt-4: Enhancing vision-language understanding with advanced large language models. arXiv preprint arXiv:2304.10592, 2023. 1, 2
+
+7
+
